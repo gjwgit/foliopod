@@ -42,7 +42,7 @@ on:
       - installers
 
 env:
-  APP: moneypod
+  APP: foliopod
   RELEASE: dev
   LINUX_PKGS: libsecret-1-dev libjsoncpp-dev
   MACOS_APP_RELEASE_UNSIGNED_PATH: build/macos/Build/Products/Release-unsigned

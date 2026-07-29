@@ -1,16 +1,16 @@
 {
   "@context": "https://www.w3.org/ns/solid/oidc-context.jsonld",
-  "client_id": "https://gjwgit.github.io/moneypod/client-profile.jsonld",
-  "client_name": "MoneyPod",
+  "client_id": "https://gjwgit.github.io/foliopod/client-profile.jsonld",
+  "client_name": "FolioPod",
   "application_type": "native",
   "redirect_uris": [
-    "https://moneypod.solidcommunity.au/redirect.html",
-    "com.togaware.moneypod://redirect",
+    "https://foliopod.solidcommunity.au/redirect.html",
+    "com.togaware.foliopod://redirect",
     "http://localhost:4400/redirect.html"
   ],
   "post_logout_redirect_uris": [
-    "https://moneypod.solidcommunity.au/redirect.html",
-    "com.togaware.moneypod://redirect",
+    "https://foliopod.solidcommunity.au/redirect.html",
+    "com.togaware.foliopod://redirect",
     "http://localhost:4400/redirect.html"
   ],
   "scope": "openid profile offline_access webid",
