@@ -1,0 +1,66 @@
+name: foliopod
+description: "FolioPod - Monitor Your Bank Accounts with Secure and Private Storage"
+publish_to: 'none'
+version: 1.0.3+4
+
+environment:
+  sdk: ^3.11.3
+
+# 20250722 gjw To automatically upgrade package dependencies:
+#
+#   flutter pub upgrade --major-versions
+#
+# To see which dependencies have newer versions available:
+#
+#   flutter pub outdated
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  emacs_text_field: ^0.1.0
+  file_picker: ^11.0.2
+  gap: ^3.0.1
+  http: ^1.6.0
+  intl: ^0.20.2
+  markdown_tooltip: ^0.0.10
+  provider: ^6.1.5
+  shared_preferences: ^2.5.4
+  solidpod: ^1.0.13
+  solidui: ^1.0.23
+  uuid: ^4.5.3
+  window_manager: ^0.5.1
+
+dev_dependencies:
+  flutter_launcher_icons: ^0.14.3
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  assets:
+    - assets/images/app_icon.png
+    - assets/images/app_image.jpg
+  uses-material-design: true
+
+# 20250429 gjw Define launcher icons for all platforms (except Linux)
+# so icons for the apps can be automatically updated using:
+#
+# `dart run flutter_launcher_icons`
+
+flutter_launcher_icons:
+  image_path: "assets/images/app_icon.png"
+  android: true
+  min_sdk_android: 21
+  ios: true
+  remove_alpha_ios: true
+  background_color_ios: "#ffffff"
+  macos:
+    generate: true
+  web:
+    generate: true
+    background_color: "#ffffff"
+    theme_color: "#ffffff"
+  windows:
+    generate: true
+    icon_size: 48 # min:48, max:256, default: 48
