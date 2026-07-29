@@ -35,7 +35,7 @@ EOL
 
 cat > ${APP}_${VER}_amd64/usr/share/applications/com.togaware.${APP}.desktop << EOL
 [Desktop Entry]
-Name=BilliPod
+Name=FolioPod
 Comment=Manage bills
 Exec=/usr/bin/${APP}
 Icon=${APP}
