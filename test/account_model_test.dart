@@ -275,6 +275,99 @@ void main() {
     });
   });
 
+  // ── Shareholdings ──────────────────────────────────────────────────────────
+
+  group('shareholdings', () {
+    Account holding() => Account.open(
+      name: 'Microsoft',
+      type: AccountType.shares,
+      symbol: 'MSFT',
+      currency: 'USD',
+      openingBalance: 100,
+      date: DateTime(2026, 1, 1),
+    );
+
+    AccountEvent trade(AccountEventType type, double units, {double? price}) =>
+        AccountEvent(
+          date: DateTime(2026, 2, 1),
+          type: type,
+          amount: units,
+          price: price,
+        );
+
+    test('buy adds units and sell subtracts them', () {
+      final a = holding()
+          .applyEvent(trade(AccountEventType.buy, 50))
+          .applyEvent(trade(AccountEventType.sell, 20));
+      expect(a.currentBalance, 130);
+      expect(a.events.last.balance, 130);
+    });
+
+    test('a dividend earns income without changing the units', () {
+      final a = holding().applyEvent(
+        AccountEvent(
+          date: DateTime.now(),
+          type: AccountEventType.dividend,
+          amount: 120,
+        ),
+      );
+      expect(a.currentBalance, 100);
+      expect(a.earned(), 120);
+      expect(a.interestFY, 120);
+    });
+
+    test('holdingStr shows units and ticker', () {
+      expect(holding().holdingStr, '100 MSFT');
+      expect(holding().isShares, isTrue);
+    });
+
+    test('descriptions use units and record the price', () {
+      final a = holding().applyEvent(
+        trade(AccountEventType.buy, 50, price: 420),
+      );
+      expect(
+        a.events.last.describe(symbol: 'US\$', ticker: 'MSFT'),
+        'Buy 50 MSFT @ US\$420.00',
+      );
+      expect(
+        a.events.first.describe(symbol: 'US\$', ticker: 'MSFT'),
+        'Opened with 100 MSFT',
+      );
+    });
+
+    test('a balance update on a holding reads as units', () {
+      final a = holding().applyEvent(
+        AccountEvent(
+          date: DateTime(2026, 3, 1),
+          type: AccountEventType.balanceUpdate,
+          amount: 150,
+        ),
+      );
+      expect(a.events.last.describe(ticker: 'MSFT'), 'Units 100 → 150 MSFT');
+    });
+
+    test('symbol, price and manual price round-trip through JSON', () {
+      final a = holding()
+          .applyEvent(trade(AccountEventType.buy, 5, price: 401.5))
+          .copyWith(manualPrice: 399.0);
+      final b = Account.fromJson(a.toJson());
+      expect(b.symbol, 'MSFT');
+      expect(b.type, AccountType.shares);
+      expect(b.manualPrice, 399.0);
+      expect(b.events.last.price, 401.5);
+    });
+
+    test('replay after an edit recomputes units', () {
+      final a = holding().applyEvent(trade(AccountEventType.buy, 50));
+      final edited = a.events.last.copyWith(amount: 10.0);
+      final b = a.rebuilt([
+        for (final e in a.events)
+          if (e.id == edited.id) edited else e,
+      ]);
+      expect(b.currentBalance, 110);
+    });
+  });
+
   // ── Currency ───────────────────────────────────────────────────────────────
 
   group('currency', () {

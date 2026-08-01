@@ -61,6 +61,13 @@ class AppProvider extends ChangeNotifier {
       accounts.toList()
         ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
+  /// Ticker symbols of every shareholding, for fetching prices.
+  /// 20260729 gjw
+  Set<String> get heldSymbols => {
+    for (final a in _accounts)
+      if (a.isShares && a.symbol != null && a.symbol!.isNotEmpty) a.symbol!,
+  };
+
   /// Total balance across open accounts.
   double get totalBalance =>
       openAccounts.fold(0, (sum, a) => sum + a.currentBalance);

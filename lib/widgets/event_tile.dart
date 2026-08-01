@@ -30,12 +30,17 @@ class EventTile extends StatelessWidget {
   /// ISO currency code of the owning account, for amount display.
   final String currency;
 
+  /// Ticker of the owning account when it is a shareholding, so
+  /// quantities show as units rather than money. 20260729 gjw
+  final String? ticker;
+
   const EventTile({
     super.key,
     required this.event,
     this.accountName,
     this.onTap,
     this.currency = baseCurrency,
+    this.ticker,
   });
 
   IconData get _icon => switch (event.type) {
@@ -44,6 +49,9 @@ class EventTile extends StatelessWidget {
     AccountEventType.deposit => Icons.attach_money,
     AccountEventType.rateChange => Icons.percent,
     AccountEventType.balanceUpdate => Icons.edit_outlined,
+    AccountEventType.buy => Icons.add_shopping_cart,
+    AccountEventType.sell => Icons.sell_outlined,
+    AccountEventType.dividend => Icons.payments_outlined,
   };
 
   @override
@@ -57,9 +65,8 @@ class EventTile extends StatelessWidget {
       leading: Icon(_icon, size: 20, color: cs.primary),
       title: Text(
         accountName != null
-            ? '$accountName — '
-                  '${event.describe(symbol: currencySymbol(currency))}'
-            : event.describe(symbol: currencySymbol(currency)),
+            ? '$accountName — ${event.describe(symbol: currencySymbol(currency), ticker: ticker)}'
+            : event.describe(symbol: currencySymbol(currency), ticker: ticker),
       ),
       subtitle: event.note != null && event.note!.isNotEmpty
           ? Text(event.note!, maxLines: 1, overflow: TextOverflow.ellipsis)
@@ -69,7 +76,9 @@ class EventTile extends StatelessWidget {
         children: [
           if (event.balance != null)
             Text(
-              'Bal ${formatCurrencyAmount(event.balance!, currency)}',
+              ticker != null
+                  ? 'Held ${formatUnits(event.balance!)}'
+                  : 'Bal ${formatCurrencyAmount(event.balance!, currency)}',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           const Gap(12),

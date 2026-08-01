@@ -14,6 +14,7 @@ import 'package:emacs_text_field/emacs_text_field.dart';
 import 'package:gap/gap.dart';
 import 'package:markdown_tooltip/markdown_tooltip.dart';
 
+import 'package:foliopod/models/account.dart';
 import 'package:foliopod/models/account_event.dart';
 import 'package:foliopod/pages/event_date_row.dart';
 import 'package:foliopod/services/money_format.dart';
@@ -29,7 +30,12 @@ typedef EventEditResult = ({AccountEvent? event, bool deleted});
 /// recomputed.
 class EventEdit extends StatefulWidget {
   final AccountEvent event;
-  const EventEdit({super.key, required this.event});
+
+  /// The owning account, so the editor can offer the right entry types
+  /// and label quantities as units or money. 20260729 gjw
+  final Account account;
+
+  const EventEdit({super.key, required this.event, required this.account});
 
   @override
   State<EventEdit> createState() => _EventEditState();
@@ -39,19 +45,29 @@ class _EventEditState extends State<EventEdit> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _value;
   late final TextEditingController _bonus;
+  late final TextEditingController _price;
   late final TextEditingController _rate;
   late final TextEditingController _note;
   late AccountEventType _type;
   late DateTime _date;
 
-  /// The types an entry can be changed between (created stays created —
-  /// it is the account's opening entry).
-  static const _types = [
-    AccountEventType.interest,
-    AccountEventType.deposit,
-    AccountEventType.rateChange,
-    AccountEventType.balanceUpdate,
-  ];
+  /// The types an entry can be changed between, matching the kind of
+  /// account (created stays created — it is the opening entry).
+  List<AccountEventType> get _types => _shares
+      ? const [
+          AccountEventType.buy,
+          AccountEventType.sell,
+          AccountEventType.dividend,
+          AccountEventType.balanceUpdate,
+        ]
+      : const [
+          AccountEventType.interest,
+          AccountEventType.deposit,
+          AccountEventType.rateChange,
+          AccountEventType.balanceUpdate,
+        ];
+
+  bool get _shares => widget.account.isShares;
 
   bool get _isCreated => widget.event.type == AccountEventType.created;
 
@@ -59,12 +75,25 @@ class _EventEditState extends State<EventEdit> {
 
   bool get _isInterest => _type == AccountEventType.interest;
 
+  bool get _isTrade =>
+      _type == AccountEventType.buy || _type == AccountEventType.sell;
+
+  /// Whether the value field holds units rather than money.
+  bool get _isUnits =>
+      _isTrade ||
+      (_shares && (_isCreated || _type == AccountEventType.balanceUpdate));
+
+  String? get _moneyPrefix => '${currencySymbol(widget.account.currency)} ';
+
   String get _valueLabel => switch (_type) {
-    AccountEventType.created => 'Opening balance',
+    AccountEventType.created => _shares ? 'Opening units' : 'Opening balance',
     AccountEventType.interest => 'Base interest',
     AccountEventType.deposit => 'Amount deposited',
     AccountEventType.rateChange => 'New rate % p.a.',
-    AccountEventType.balanceUpdate => 'New balance',
+    AccountEventType.buy => 'Units bought',
+    AccountEventType.sell => 'Units sold',
+    AccountEventType.dividend => 'Dividend received',
+    AccountEventType.balanceUpdate => _shares ? 'Units held' : 'New balance',
   };
 
   // Snapshot of the initial values, used to detect whether anything has
@@ -72,6 +101,7 @@ class _EventEditState extends State<EventEdit> {
   // something to save.
   late final String _initValue;
   late final String _initBonus;
+  late final String _initPrice;
   late final String _initRate;
   late final String _initNote;
   late final AccountEventType _initType;
@@ -80,6 +110,7 @@ class _EventEditState extends State<EventEdit> {
   bool get _hasChanges =>
       _value.text != _initValue ||
       _bonus.text != _initBonus ||
+      _price.text != _initPrice ||
       _rate.text != _initRate ||
       _note.text != _initNote ||
       _type != _initType ||
@@ -90,7 +121,10 @@ class _EventEditState extends State<EventEdit> {
       (!_isCreated || parseNum(_rate.text) != null) &&
       (!_isInterest ||
           _bonus.text.trim().isEmpty ||
-          parseNum(_bonus.text) != null);
+          parseNum(_bonus.text) != null) &&
+      (!_isTrade ||
+          _price.text.trim().isEmpty ||
+          parseNum(_price.text) != null);
 
   @override
   void initState() {
@@ -102,9 +136,17 @@ class _EventEditState extends State<EventEdit> {
     // amount. For created events both fields are shown.
     final v = _type == AccountEventType.rateChange ? e.rate : e.amount;
     _value = TextEditingController(
-      text: _type == AccountEventType.rateChange
-          ? (v ?? 0).toStringAsFixed(2)
-          : formatMoney(v ?? 0),
+      text: switch (_type) {
+        AccountEventType.rateChange => (v ?? 0).toStringAsFixed(2),
+        AccountEventType.buy || AccountEventType.sell => formatUnits(v ?? 0),
+        _ when _shares && _type != AccountEventType.dividend => formatUnits(
+          v ?? 0,
+        ),
+        _ => formatMoney(v ?? 0),
+      },
+    );
+    _price = TextEditingController(
+      text: e.price != null ? formatMoney(e.price!) : '',
     );
     _bonus = TextEditingController(
       text: e.bonus != null ? formatMoney(e.bonus!) : '',
@@ -114,19 +156,20 @@ class _EventEditState extends State<EventEdit> {
 
     _initValue = _value.text;
     _initBonus = _bonus.text;
+    _initPrice = _price.text;
     _initRate = _rate.text;
     _initNote = _note.text;
     _initType = _type;
     _initDate = _date;
 
-    for (final c in [_value, _bonus, _rate, _note]) {
+    for (final c in [_value, _bonus, _price, _rate, _note]) {
       c.addListener(() => setState(() {}));
     }
   }
 
   @override
   void dispose() {
-    for (final c in [_value, _bonus, _rate, _note]) {
+    for (final c in [_value, _bonus, _price, _rate, _note]) {
       c.dispose();
     }
     super.dispose();
@@ -150,6 +193,9 @@ class _EventEditState extends State<EventEdit> {
         amount: _isRate ? null : v,
         bonus: _isInterest && _bonus.text.trim().isNotEmpty
             ? parseNum(_bonus.text)
+            : null,
+        price: _isTrade && _price.text.trim().isNotEmpty
+            ? parseNum(_price.text)
             : null,
         rate: _isRate ? v : null,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
@@ -210,8 +256,9 @@ class _EventEditState extends State<EventEdit> {
 **Entry type**
 
 Changing the type changes how the value is applied when the history
-is replayed: interest and deposits add to the balance, a rate change
-sets the rate, and a balance update sets the balance.
+is replayed: buys and deposits add, sells subtract, a rate change
+sets the rate, a dividend leaves the holding unchanged, and a balance
+update sets the figure outright.
 
 ''',
                   child: DropdownButtonFormField<AccountEventType>(
@@ -239,7 +286,9 @@ sets the rate, and a balance update sets the balance.
                       ),
                       decoration: InputDecoration(
                         labelText: _valueLabel,
-                        prefixText: _isRate && !_isCreated ? null : '\$ ',
+                        prefixText: (_isRate && !_isCreated) || _isUnits
+                            ? null
+                            : _moneyPrefix,
                         border: const OutlineInputBorder(),
                         isDense: true,
                       ),
@@ -279,6 +328,36 @@ sets the rate, and a balance update sets the balance.
                   onChanged: (d) => setState(() => _date = d),
                 ),
               ],
+              if (_isTrade) ...[
+                const Gap(12),
+                MarkdownTooltip(
+                  message: '''
+
+**Price paid**
+
+The per-unit price for this trade, kept for the history. The holding
+is always valued at the latest market price, not this one.
+
+''',
+                  child: TextFormField(
+                    key: const ValueKey('price'),
+                    controller: _price,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Price each',
+                      prefixText: _moneyPrefix,
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty || parseNum(v) != null)
+                        ? null
+                        : 'Number',
+                  ),
+                ),
+              ],
               if (_isInterest) ...[
                 const Gap(12),
                 MarkdownTooltip(
@@ -297,10 +376,10 @@ Leave empty when there is no bonus.
                     keyboardType: const TextInputType.numberWithOptions(
                       decimal: true,
                     ),
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Bonus interest',
-                      prefixText: '\$ ',
-                      border: OutlineInputBorder(),
+                      prefixText: _moneyPrefix,
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                     validator: (v) =>

@@ -46,7 +46,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final result = await showDialog<EventEditResult>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => EventEdit(event: event),
+      builder: (_) => EventEdit(event: event, account: account),
     );
     if (result == null || !mounted) return;
     if (result.deleted) {
@@ -152,6 +152,7 @@ it. Search matches account name, change type and notes.
                     event: entries[i].event,
                     accountName: entries[i].account.name,
                     currency: entries[i].account.currency,
+                    ticker: entries[i].account.symbol,
                     onTap: () =>
                         _editEvent(entries[i].account, entries[i].event),
                   ),

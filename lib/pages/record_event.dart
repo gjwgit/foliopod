@@ -46,9 +46,10 @@ class _RecordEventState extends State<RecordEvent> {
   final _formKey = GlobalKey<FormState>();
   final _value = TextEditingController();
   final _bonus = TextEditingController();
+  final _price = TextEditingController();
   late final TextEditingController _balance;
   final _note = TextEditingController();
-  AccountEventType _type = AccountEventType.interest;
+  late AccountEventType _type;
   DateTime _date = DateTime.now();
 
   /// True once the user has edited the balance field themselves, after
@@ -58,14 +59,23 @@ class _RecordEventState extends State<RecordEvent> {
   /// Guards the balance listener while the field is auto-filled.
   bool _syncing = false;
 
-  /// The recordable event types (created is only ever added by
-  /// Account.open).
-  static const _types = [
-    AccountEventType.interest,
-    AccountEventType.deposit,
-    AccountEventType.rateChange,
-    AccountEventType.balanceUpdate,
-  ];
+  /// The recordable event types for this account (created is only ever
+  /// added by Account.open). A shareholding trades units and receives
+  /// dividends; a cash account earns interest and takes deposits.
+  /// 20260729 gjw
+  List<AccountEventType> get _types => widget.account.isShares
+      ? const [
+          AccountEventType.buy,
+          AccountEventType.sell,
+          AccountEventType.dividend,
+          AccountEventType.balanceUpdate,
+        ]
+      : const [
+          AccountEventType.interest,
+          AccountEventType.deposit,
+          AccountEventType.rateChange,
+          AccountEventType.balanceUpdate,
+        ];
 
   bool get _isRate => _type == AccountEventType.rateChange;
 
@@ -73,11 +83,56 @@ class _RecordEventState extends State<RecordEvent> {
 
   bool get _isBalanceUpdate => _type == AccountEventType.balanceUpdate;
 
+  /// A buy or sell: the value entered is a quantity of units, and a
+  /// per-unit price can be recorded alongside.
+  bool get _isTrade =>
+      _type == AccountEventType.buy || _type == AccountEventType.sell;
+
+  /// Whether the value field holds units rather than money.
+  bool get _isUnits => _isTrade || (_isBalanceUpdate && _shares);
+
+  bool get _shares => widget.account.isShares;
+
+  /// Prefix for a money field in the account's currency; null for a
+  /// units or rate field.
+  String? get _moneyPrefix => '${currencySymbol(widget.account.currency)} ';
+
+  static const _cashTypeHelp = '''
+
+**What to record**
+
+- **Interest** — interest credited by the bank; added to the balance.
+- **Deposit** — money deposited into the account; added to the
+  balance.
+- **Rate Change** — the bank changed the interest rate; the old rate is
+  kept in the history.
+- **Balance Update** — set the balance to match the bank; the old
+  balance is kept in the history.
+
+''';
+
+  static const _sharesTypeHelp = '''
+
+**What to record**
+
+- **Buy** — units acquired; added to the holding, with the price paid
+  recorded for the history.
+- **Sell** — units disposed of; subtracted from the holding.
+- **Dividend** — cash dividend received; counts as income earned and
+  leaves the units unchanged.
+- **Balance Update** — set the units held to match your broker; the
+  old figure is kept in the history.
+
+''';
+
   String get _valueLabel => switch (_type) {
     AccountEventType.interest => 'Base interest',
     AccountEventType.deposit => 'Amount deposited',
     AccountEventType.rateChange => 'New rate % p.a.',
-    _ => 'New balance',
+    AccountEventType.buy => 'Units bought',
+    AccountEventType.sell => 'Units sold',
+    AccountEventType.dividend => 'Dividend received',
+    _ => _shares ? 'Units held' : 'New balance',
   };
 
   /// The balance the primary entry alone would produce (for interest,
@@ -88,6 +143,9 @@ class _RecordEventState extends State<RecordEvent> {
     return switch (_type) {
       AccountEventType.interest ||
       AccountEventType.deposit => widget.account.currentBalance + v + b,
+      AccountEventType.buy => widget.account.currentBalance + v,
+      AccountEventType.sell => widget.account.currentBalance - v,
+      // A dividend is cash paid out: the units held do not change.
       _ => widget.account.currentBalance,
     };
   }
@@ -95,9 +153,13 @@ class _RecordEventState extends State<RecordEvent> {
   @override
   void initState() {
     super.initState();
+    _type = _types.first;
     _balance = TextEditingController(
-      text: formatMoney(widget.account.currentBalance),
+      text: _shares
+          ? formatUnits(widget.account.currentBalance)
+          : formatMoney(widget.account.currentBalance),
     );
+    _price.addListener(() => setState(() {}));
     _value.addListener(() {
       _syncBalance();
       setState(() {});
@@ -116,7 +178,9 @@ class _RecordEventState extends State<RecordEvent> {
   void _syncBalance() {
     if (_balanceTouched || _isBalanceUpdate) return;
     _syncing = true;
-    _balance.text = formatMoney(_computedBalance);
+    _balance.text = _shares
+        ? formatUnits(_computedBalance)
+        : formatMoney(_computedBalance);
     _syncing = false;
   }
 
@@ -124,6 +188,7 @@ class _RecordEventState extends State<RecordEvent> {
   void dispose() {
     _value.dispose();
     _bonus.dispose();
+    _price.dispose();
     _balance.dispose();
     _note.dispose();
     super.dispose();
@@ -134,7 +199,10 @@ class _RecordEventState extends State<RecordEvent> {
       (_isBalanceUpdate || parseNum(_balance.text) != null) &&
       (!_isInterest ||
           _bonus.text.trim().isEmpty ||
-          parseNum(_bonus.text) != null);
+          parseNum(_bonus.text) != null) &&
+      (!_isTrade ||
+          _price.text.trim().isEmpty ||
+          parseNum(_price.text) != null);
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
@@ -147,6 +215,9 @@ class _RecordEventState extends State<RecordEvent> {
       AccountEvent(
         date: _date,
         type: _type,
+        price: _isTrade && _price.text.trim().isNotEmpty
+            ? parseNum(_price.text)
+            : null,
         amount: _isRate ? null : v,
         bonus: bonus,
         rate: _isRate ? v : null,
@@ -195,19 +266,7 @@ class _RecordEventState extends State<RecordEvent> {
               ),
               const Gap(12),
               MarkdownTooltip(
-                message: '''
-
-**What to record**
-
-- **Interest** — interest credited by the bank; added to the balance.
-- **Deposit** — money deposited into the account; added to the
-  balance.
-- **Rate Change** — the bank changed the interest rate; the old rate is
-  kept in the history.
-- **Balance Update** — set the balance to match the bank; the old
-  balance is kept in the history.
-
-''',
+                message: _shares ? _sharesTypeHelp : _cashTypeHelp,
                 child: DropdownButtonFormField<AccountEventType>(
                   initialValue: _type,
                   decoration: const InputDecoration(
@@ -238,9 +297,7 @@ class _RecordEventState extends State<RecordEvent> {
                       ),
                       decoration: InputDecoration(
                         labelText: _valueLabel,
-                        prefixText: _isRate
-                            ? null
-                            : '${currencySymbol(widget.account.currency)} ',
+                        prefixText: _isRate || _isUnits ? null : _moneyPrefix,
                         border: const OutlineInputBorder(),
                         isDense: true,
                       ),
@@ -258,6 +315,37 @@ class _RecordEventState extends State<RecordEvent> {
                   ),
                 ],
               ),
+              if (_isTrade) ...[
+                const Gap(12),
+                MarkdownTooltip(
+                  message: '''
+
+**Price paid**
+
+The per-unit price for this trade, recorded for the history. Optional
+— the holding is always valued at the latest market price, not this
+one. Leave empty if you would rather not record it.
+
+''',
+                  child: TextFormField(
+                    key: const ValueKey('price'),
+                    controller: _price,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: 'Price each',
+                      prefixText: _moneyPrefix,
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    validator: (v) =>
+                        (v == null || v.trim().isEmpty || parseNum(v) != null)
+                        ? null
+                        : 'Number',
+                  ),
+                ),
+              ],
               if (_isInterest) ...[
                 const Gap(12),
                 MarkdownTooltip(
@@ -279,8 +367,7 @@ Leave empty when there is no bonus.
                     ),
                     decoration: InputDecoration(
                       labelText: 'Bonus interest',
-                      prefixText:
-                          '${currencySymbol(widget.account.currency)} ',
+                      prefixText: _moneyPrefix,
                       border: const OutlineInputBorder(),
                       isDense: true,
                     ),
@@ -294,14 +381,15 @@ Leave empty when there is no bonus.
               if (!_isBalanceUpdate) ...[
                 const Gap(12),
                 MarkdownTooltip(
-                  message: '''
+                  message:
+                      '''
 
-**Balance after**
+${_shares ? '**Units after**' : '**Balance after**'}
 
-The balance this entry will produce, filled in automatically from the
-amount. Edit it to match the bank if untracked transactions have
-moved the balance — the difference is recorded as a separate balance
-update alongside this entry, keeping the history complete.
+The ${_shares ? 'holding' : 'balance'} this entry will produce, filled in
+automatically from the amount. Edit it to match your ${_shares ? 'broker' : 'bank'} if untracked
+transactions have moved it — the difference is recorded as a separate
+balance update alongside this entry, keeping the history complete.
 
 ''',
                   child: TextFormField(
@@ -311,9 +399,8 @@ update alongside this entry, keeping the history complete.
                       decimal: true,
                     ),
                     decoration: InputDecoration(
-                      labelText: 'Balance after',
-                      prefixText:
-                          '${currencySymbol(widget.account.currency)} ',
+                      labelText: _shares ? 'Units after' : 'Balance after',
+                      prefixText: _shares ? null : _moneyPrefix,
                       border: const OutlineInputBorder(),
                       isDense: true,
                     ),

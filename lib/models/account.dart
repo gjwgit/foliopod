@@ -13,7 +13,7 @@ import 'package:uuid/uuid.dart';
 import 'package:foliopod/constants/app.dart' show baseCurrency;
 import 'package:foliopod/models/account_event.dart';
 import 'package:foliopod/services/money_format.dart'
-    show formatCurrencyAmount;
+    show formatCurrencyAmount, formatUnits;
 
 const _uuid = Uuid();
 
@@ -25,6 +25,9 @@ enum AccountType {
   termDeposit,
   transaction,
   offset,
+  // A holding of shares rather than cash: the balance counts units of
+  // [Account.symbol] and the value comes from the market. 20260729 gjw
+  shares,
   other;
 
   String get label => switch (this) {
@@ -32,6 +35,7 @@ enum AccountType {
     termDeposit => 'Term Deposit',
     transaction => 'Transaction',
     offset => 'Offset',
+    shares => 'Shares',
     other => 'Other',
   };
 }
@@ -51,6 +55,14 @@ class Account {
 
   /// Free-text reference such as BSB / account number (stored encrypted).
   final String? number;
+
+  /// Ticker symbol for a shareholding, e.g. `MSFT` or `CBA.AX`. Used to
+  /// fetch the market price. Null for cash accounts. 20260729 gjw
+  final String? symbol;
+
+  /// Fallback per-unit price, used when no market price has been
+  /// fetched (offline, or the provider is unavailable). 20260729 gjw
+  final double? manualPrice;
 
   /// ISO currency code of the account's balances, e.g. AUD, USD, SGD.
   /// Balances display natively and are normalised to [baseCurrency]
@@ -72,6 +84,8 @@ class Account {
     this.institution,
     this.type = AccountType.savings,
     this.number,
+    this.symbol,
+    this.manualPrice,
     this.currency = baseCurrency,
     this.currentBalance = 0,
     this.currentRate = 0,
@@ -87,6 +101,8 @@ class Account {
     String? institution,
     AccountType type = AccountType.savings,
     String? number,
+    String? symbol,
+    double? manualPrice,
     String currency = baseCurrency,
     double openingBalance = 0,
     double rate = 0,
@@ -98,6 +114,8 @@ class Account {
         institution: institution,
         type: type,
         number: number,
+        symbol: symbol,
+        manualPrice: manualPrice,
         currency: currency,
         note: note,
       ).applyEvent(
@@ -117,6 +135,8 @@ class Account {
     if (institution != null) 'institution': institution,
     'type': type.name,
     if (number != null) 'number': number,
+    if (symbol != null) 'symbol': symbol,
+    if (manualPrice != null) 'manualPrice': manualPrice,
     'currency': currency,
     'currentBalance': currentBalance,
     'currentRate': currentRate,
@@ -134,6 +154,8 @@ class Account {
       orElse: () => AccountType.other,
     ),
     number: j['number'] as String?,
+    symbol: j['symbol'] as String?,
+    manualPrice: (j['manualPrice'] as num?)?.toDouble(),
     // Accounts stored before multi-currency support default to AUD.
     currency: j['currency'] as String? ?? baseCurrency,
     currentBalance: (j['currentBalance'] as num?)?.toDouble() ?? 0,
@@ -150,6 +172,8 @@ class Account {
     Object? institution = _sentinel,
     AccountType? type,
     Object? number = _sentinel,
+    Object? symbol = _sentinel,
+    Object? manualPrice = _sentinel,
     String? currency,
     double? currentBalance,
     double? currentRate,
@@ -164,6 +188,10 @@ class Account {
         : institution as String?,
     type: type ?? this.type,
     number: number == _sentinel ? this.number : number as String?,
+    symbol: symbol == _sentinel ? this.symbol : symbol as String?,
+    manualPrice: manualPrice == _sentinel
+        ? this.manualPrice
+        : manualPrice as double?,
     currency: currency ?? this.currency,
     currentBalance: currentBalance ?? this.currentBalance,
     currentRate: currentRate ?? this.currentRate,
@@ -197,6 +225,14 @@ class Account {
       case AccountEventType.balanceUpdate:
         ev = ev.copyWith(previous: currentBalance);
         balance = event.amount ?? balance;
+      // Shareholdings: the balance counts units. A dividend is cash paid
+      // out, so it earns income without changing the units held.
+      case AccountEventType.buy:
+        balance += event.amount ?? 0;
+      case AccountEventType.sell:
+        balance -= event.amount ?? 0;
+      case AccountEventType.dividend:
+        break;
     }
     ev = ev.copyWith(balance: balance);
     return copyWith(
@@ -230,13 +266,15 @@ class Account {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /// Sum of interest (base plus bonus, and optionally deposits)
-  /// credited in [from, to). Null bounds are unbounded.
+  /// Sum of the income credited in [from, to): interest (base plus
+  /// bonus) for a cash account, dividends for a shareholding, and
+  /// optionally deposits. Null bounds are unbounded.
   double earned({DateTime? from, DateTime? to, bool includeDeposits = false}) =>
       events
           .where(
             (e) =>
                 (e.type == AccountEventType.interest ||
+                    e.type == AccountEventType.dividend ||
                     (includeDeposits && e.type == AccountEventType.deposit)) &&
                 (from == null || !e.date.isBefore(from)) &&
                 (to == null || e.date.isBefore(to)),
@@ -249,6 +287,15 @@ class Account {
 
   /// Interest earned this financial year.
   double get interestFY => earned(from: fyStart(DateTime.now()));
+
+  /// Whether this account holds shares rather than cash.
+  bool get isShares => type == AccountType.shares;
+
+  /// The holding as shown to the user: `100 MSFT` for a shareholding,
+  /// or the formatted balance for a cash account. 20260729 gjw
+  String get holdingStr => isShares
+      ? '${formatUnits(currentBalance)} ${symbol ?? 'units'}'
+      : balanceStr;
 
   /// Formatted current balance in the account's own currency, e.g.
   /// `\$12,345.67` for AUD or `US\$12,345.67` for USD. 20260729 gjw

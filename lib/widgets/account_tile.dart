@@ -18,6 +18,7 @@ import 'package:foliopod/constants/app.dart' show baseCurrency;
 import 'package:foliopod/models/account.dart';
 import 'package:foliopod/services/exchange_service.dart';
 import 'package:foliopod/services/money_format.dart';
+import 'package:foliopod/services/portfolio_service.dart';
 
 class AccountTile extends StatelessWidget {
   final Account account;
@@ -33,6 +34,35 @@ class AccountTile extends StatelessWidget {
     required this.onDelete,
   });
 
+  /// Tooltip for the normalised AUD figure, covering a shareholding
+  /// (units times market price) and a foreign cash account.
+  String _audHelp(Account account, String rateNote, double? price) {
+    if (account.isShares) {
+      final priced = price != null
+          ? 'the latest price of '
+                '${formatCurrencyAmount(price, account.currency)}'
+          : 'the latest price';
+      return '''
+
+**Market value in AUD**
+
+The units held valued at $priced, converted to AUD at the ECB daily
+reference rate (frankfurter.app)$rateNote. Shown as — until a price
+and rate have been fetched.
+
+''';
+    }
+    return '''
+
+**Normalised to AUD**
+
+The balance converted to AUD at the ECB daily reference rate
+(frankfurter.app)$rateNote. Shown as — when no rate has been fetched
+yet.
+
+''';
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -41,9 +71,11 @@ class AccountTile extends StatelessWidget {
 
     // Normalised value for foreign-currency accounts, when a rate is
     // available (ECB daily rates via ExchangeService). 20260729 gjw
-    final aud = account.currency == baseCurrency
-        ? null
-        : ExchangeService.toAud(account.currentBalance, account.currency);
+    // A shareholding always shows its AUD value (it is units, not money,
+    // in the main line); a foreign cash account shows one when converted.
+    final showAud = account.isShares || account.currency != baseCurrency;
+    final aud = showAud ? PortfolioService.audValue(account) : null;
+    final price = PortfolioService.priceFor(account);
     final audRate = account.currency == baseCurrency
         ? null
         : ExchangeService.rateFromAud(account.currency);
@@ -155,27 +187,17 @@ the account to see the full transaction log.
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    account.balanceStr,
+                    account.holdingStr,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       color: cs.primary,
                     ),
                   ),
-                  if (account.currency != baseCurrency)
+                  if (showAud)
                     MarkdownTooltip(
-                      message: '''
-
-**Normalised to AUD**
-
-The balance converted to AUD at the ECB daily reference rate
-(frankfurter.app)$rateNote. Shown as — when no rate has been fetched
-yet.
-
-''',
+                      message: _audHelp(account, rateNote, price),
                       child: Text(
-                        aud != null
-                            ? '≈ A\$${formatMoney(aud)}'
-                            : '≈ A\$ —',
+                        aud != null ? '≈ A\$${formatMoney(aud)}' : '≈ A\$ —',
                         style: TextStyle(
                           fontSize: 12,
                           color: cs.onSurfaceVariant,
@@ -183,16 +205,20 @@ yet.
                       ),
                     ),
                   Text(
-                    account.rateStr,
+                    account.isShares
+                        ? (price != null
+                              ? '@ ${formatCurrencyAmount(price, account.currency)}'
+                              : '@ —')
+                        : account.rateStr,
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                   ),
                   MarkdownTooltip(
                     message: '''
 
-**Interest this FY**
+**Income this FY**
 
-Total interest earned since 1 July (the current financial year),
-including bonus interest.
+Total earned since 1 July (the current financial year) — interest
+including any bonus interest, or dividends for a shareholding.
 
 ''',
                     child: Text(

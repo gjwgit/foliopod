@@ -38,6 +38,25 @@ recomputed by replaying the history in date order. The Accounts view
 shows each account's balance, rate, and interest earned this
 financial year (1 July), along with totals across your open accounts.
 
+## Shareholdings
+
+An account of type **Shares** holds units of a ticker rather than
+cash — 100 MSFT, say. Record **Buy** and **Sell** entries to change
+the units held (with the price paid kept in the history) and
+**Dividend** entries for cash received, which counts as income the
+same way interest does for a savings account. The holding is valued
+at the latest market price, converted to AUD, and included in the
+totals alongside your cash accounts.
+
+Prices come from the Yahoo Finance chart endpoint, which needs no API
+key. It is not an official API: it rate limits and can change without
+notice, so every failure is non-fatal — the last fetched price stays
+cached for offline use, and each holding can carry a fallback price
+you enter yourself, used only when no market price is available. All
+of the provider-specific code sits in `_fetchQuote` in
+`lib/services/price_service.dart`, so swapping providers means
+rewriting one method.
+
 Accounts can be held in any currency (AUD, USD, SGD, ...). Balances
 and interest display in the account's own currency, and are
 normalised to AUD wherever accounts appear together — the tile shows

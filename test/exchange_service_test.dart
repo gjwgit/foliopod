@@ -60,10 +60,9 @@ void main() {
 
   group('ratesDate', () {
     test('reflects the injected publication date', () {
-      ExchangeService.setRatesForTesting(
-        {'USD': 0.65},
-        date: DateTime(2026, 7, 28),
-      );
+      ExchangeService.setRatesForTesting({
+        'USD': 0.65,
+      }, date: DateTime(2026, 7, 28));
       expect(ExchangeService.ratesDate, DateTime(2026, 7, 28));
       expect(ExchangeService.hasRates, isTrue);
     });

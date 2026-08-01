@@ -41,6 +41,8 @@ class _AccountEditState extends State<AccountEdit> {
   late final TextEditingController _number;
   late final TextEditingController _balance;
   late final TextEditingController _rate;
+  late final TextEditingController _symbol;
+  late final TextEditingController _price;
   late final TextEditingController _note;
   late AccountType _type;
   late String _currency;
@@ -53,6 +55,8 @@ class _AccountEditState extends State<AccountEdit> {
   late final String _initName;
   late final String _initInstitution;
   late final String _initNumber;
+  late final String _initSymbol;
+  late final String _initPrice;
   late final String _initNote;
   late final AccountType _initType;
   late final String _initCurrency;
@@ -68,6 +72,8 @@ class _AccountEditState extends State<AccountEdit> {
       _name.text != _initName ||
       _institution.text != _initInstitution ||
       _number.text != _initNumber ||
+      _symbol.text != _initSymbol ||
+      _price.text != _initPrice ||
       _note.text != _initNote ||
       _type != _initType ||
       _currency != _initCurrency ||
@@ -80,6 +86,10 @@ class _AccountEditState extends State<AccountEdit> {
     _name = TextEditingController(text: a?.name ?? '');
     _institution = TextEditingController(text: a?.institution ?? '');
     _number = TextEditingController(text: a?.number ?? '');
+    _symbol = TextEditingController(text: a?.symbol ?? '');
+    _price = TextEditingController(
+      text: a?.manualPrice != null ? formatMoney(a!.manualPrice!) : '',
+    );
     _balance = TextEditingController(
       text: a != null ? formatMoney(a.currentBalance) : '',
     );
@@ -94,23 +104,40 @@ class _AccountEditState extends State<AccountEdit> {
     _initName = _name.text;
     _initInstitution = _institution.text;
     _initNumber = _number.text;
+    _initSymbol = _symbol.text;
+    _initPrice = _price.text;
     _initNote = _note.text;
     _initType = _type;
     _initCurrency = _currency;
     _initIsClosed = _isClosed;
 
-    for (final c in [_name, _institution, _number, _note]) {
+    for (final c in [_name, _institution, _number, _symbol, _price, _note]) {
       c.addListener(() => setState(() {}));
     }
   }
 
   @override
   void dispose() {
-    for (final c in [_name, _institution, _number, _balance, _rate, _note]) {
+    for (final c in [
+      _name,
+      _institution,
+      _number,
+      _balance,
+      _rate,
+      _symbol,
+      _price,
+      _note,
+    ]) {
       c.dispose();
     }
     super.dispose();
   }
+
+  bool get _isShares => _type == AccountType.shares;
+
+  /// The ticker in upper case, or null when blank.
+  String? get _symbolOrNull =>
+      _symbol.text.trim().isEmpty ? null : _symbol.text.trim().toUpperCase();
 
   String get _balanceHelp => _isNew
       ? '''
@@ -128,6 +155,16 @@ entry.
 The current balance changes only through recorded events so the
 history stays complete. Use the Record button on the account to
 update it.
+
+''';
+
+  String get _priceHelp => '''
+
+**Fallback price**
+
+An optional per-unit price used to value the holding when no market
+price has been fetched — offline, or when the price provider is
+unavailable. A fetched price always takes precedence.
 
 ''';
 
@@ -161,6 +198,8 @@ change.
         type: _type,
         currency: _currency,
         number: _number.text.trim().isEmpty ? null : _number.text.trim(),
+        symbol: _symbolOrNull,
+        manualPrice: parseNum(_price.text),
         openingBalance: parseNum(_balance.text) ?? 0,
         rate: parseNum(_rate.text) ?? 0,
         date: _opened,
@@ -175,6 +214,8 @@ change.
         type: _type,
         currency: _currency,
         number: _number.text.trim().isEmpty ? null : _number.text.trim(),
+        symbol: _symbolOrNull,
+        manualPrice: parseNum(_price.text),
         isClosed: _isClosed,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       );
@@ -262,14 +303,36 @@ shown together, using the ECB daily reference rates.
                   ],
                 ),
                 const Gap(12),
-                TextFormField(
-                  controller: _number,
-                  decoration: const InputDecoration(
-                    labelText: 'BSB / Account number',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                if (_isShares)
+                  MarkdownTooltip(
+                    message: '''
+
+**Ticker symbol**
+
+The market symbol used to look up the share price, for example
+`MSFT` for Microsoft or `CBA.AX` for an ASX listing. Set the currency
+above to the one the shares trade in.
+
+''',
+                    child: TextFormField(
+                      controller: _symbol,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Ticker symbol',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                    ),
+                  )
+                else
+                  TextFormField(
+                    controller: _number,
+                    decoration: const InputDecoration(
+                      labelText: 'BSB / Account number',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
-                ),
                 const Gap(12),
                 Row(
                   children: [
@@ -283,8 +346,10 @@ shown together, using the ECB daily reference rates.
                             decimal: true,
                           ),
                           decoration: InputDecoration(
-                            labelText: _isNew ? 'Opening balance' : 'Balance',
-                            prefixText: '\$ ',
+                            labelText: _isShares
+                                ? (_isNew ? 'Units held' : 'Units')
+                                : (_isNew ? 'Opening balance' : 'Balance'),
+                            prefixText: _isShares ? null : '\$ ',
                             border: const OutlineInputBorder(),
                             isDense: true,
                           ),
@@ -293,21 +358,38 @@ shown together, using the ECB daily reference rates.
                     ),
                     const Gap(12),
                     Expanded(
-                      child: MarkdownTooltip(
-                        message: _rateHelp,
-                        child: TextFormField(
-                          controller: _rate,
-                          enabled: _isNew,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: const InputDecoration(
-                            labelText: 'Rate % p.a.',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                      ),
+                      child: _isShares
+                          ? MarkdownTooltip(
+                              message: _priceHelp,
+                              child: TextFormField(
+                                controller: _price,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: const InputDecoration(
+                                  labelText: 'Fallback price',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                              ),
+                            )
+                          : MarkdownTooltip(
+                              message: _rateHelp,
+                              child: TextFormField(
+                                controller: _rate,
+                                enabled: _isNew,
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                      decimal: true,
+                                    ),
+                                decoration: const InputDecoration(
+                                  labelText: 'Rate % p.a.',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                ),
+                              ),
+                            ),
                     ),
                   ],
                 ),

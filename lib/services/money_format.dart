@@ -20,6 +20,12 @@ final _money = NumberFormat('#,##0.00');
 /// `12,345.67` (no currency symbol — callers add `$` where wanted).
 String formatMoney(double value) => _money.format(value);
 
+final _units = NumberFormat('#,##0.####');
+
+/// Format a share quantity: thousands separated, up to four decimals,
+/// with trailing zeros dropped (100, 0.5, 1,234.5678). 20260729 gjw
+String formatUnits(double value) => _units.format(value);
+
 /// Display symbol for an ISO currency code, e.g. `US\$` for USD.
 /// Unlisted codes fall back to `CODE ` as a prefix. 20260729 gjw
 String currencySymbol(String code) => switch (code) {

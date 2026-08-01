@@ -92,9 +92,7 @@ class ExchangeService {
       final uri = Uri.parse(
         'https://api.frankfurter.app/latest?from=$baseCurrency',
       );
-      final response = await http.get(uri).timeout(
-        const Duration(seconds: 10),
-      );
+      final response = await http.get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode != 200) {
         debugPrint('[ExchangeService] refresh HTTP ${response.statusCode}');
         return false;
@@ -156,10 +154,7 @@ class ExchangeService {
 
   /// Inject rates directly — used in tests to avoid network and prefs.
   @visibleForTesting
-  static void setRatesForTesting(
-    Map<String, double>? rates, {
-    DateTime? date,
-  }) {
+  static void setRatesForTesting(Map<String, double>? rates, {DateTime? date}) {
     _rates = rates;
     _ratesDate = date;
     _fetched = rates == null ? null : DateTime.now();

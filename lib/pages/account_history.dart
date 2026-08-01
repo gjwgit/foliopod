@@ -22,6 +22,7 @@ import 'package:foliopod/pages/record_event.dart';
 import 'package:foliopod/services/app_provider.dart';
 import 'package:foliopod/services/exchange_service.dart';
 import 'package:foliopod/services/money_format.dart';
+import 'package:foliopod/services/portfolio_service.dart';
 import 'package:foliopod/widgets/error_dialog.dart';
 import 'package:foliopod/widgets/event_tile.dart';
 
@@ -73,7 +74,7 @@ class AccountHistory extends StatelessWidget {
     final result = await showDialog<EventEditResult>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => EventEdit(event: event),
+      builder: (_) => EventEdit(event: event, account: account),
     );
     if (result == null || !context.mounted) return;
     if (result.deleted) {
@@ -90,18 +91,27 @@ class AccountHistory extends StatelessWidget {
   /// ` (≈ A\$1,900.00)`, or empty for AUD accounts or when no rate is
   /// available. 20260729 gjw
   String _audNote(Account account) {
-    if (account.currency == baseCurrency) return '';
-    final aud = ExchangeService.toAud(
-      account.currentBalance,
-      account.currency,
-    );
+    // A shareholding is quoted in units, so always show its AUD market
+    // value; a cash account only needs one when it is not already AUD.
+    if (!account.isShares && account.currency == baseCurrency) return '';
+    final aud = PortfolioService.audValue(account);
     if (aud == null) return '';
     final rate = ExchangeService.rateFromAud(account.currency);
-    final rateNote = rate != null
+    final rateNote = rate != null && account.currency != baseCurrency
         ? ', A\$1 = ${currencySymbol(account.currency)}'
               '${rate.toStringAsFixed(4)}'
         : '';
     return ' (≈ A\$${formatMoney(aud)}$rateNote)';
+  }
+
+  /// The middle clause of the subheading: the market price for a
+  /// shareholding, or the interest rate for a cash account. 20260729 gjw
+  String _rateOrPrice(Account account) {
+    if (!account.isShares) return 'at ${account.rateStr}';
+    final price = PortfolioService.priceFor(account);
+    return price != null
+        ? 'at ${formatCurrencyAmount(price, account.currency)} each'
+        : 'with no price yet';
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
@@ -162,10 +172,11 @@ note.
             // can be copied; it carries its own selection handling, no
             // SelectionArea required. 20260729 gjw
             SelectableText(
-              'Currently ${account.balanceStr}'
-              '${_audNote(account)} at ${account.rateStr} — '
-              '${account.interestFYStr} interest since 1 July. '
-              'Tap an entry to edit it.',
+              'Currently ${account.holdingStr}'
+              '${_audNote(account)} ${_rateOrPrice(account)} — '
+              '${account.interestFYStr} '
+              '${account.isShares ? 'dividends' : 'interest'} '
+              'since 1 July. Tap an entry to edit it.',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             const Divider(),
@@ -182,6 +193,7 @@ note.
                       itemBuilder: (context, i) => EventTile(
                         event: events[i],
                         currency: account.currency,
+                        ticker: account.symbol,
                         onTap: () => _editEvent(context, account, events[i]),
                       ),
                     ),

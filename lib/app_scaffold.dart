@@ -23,6 +23,7 @@ import 'package:foliopod/screens/import_screen.dart';
 import 'package:foliopod/services/app_provider.dart'
     show AppProvider, StartupPhase;
 import 'package:foliopod/services/exchange_service.dart';
+import 'package:foliopod/services/price_service.dart';
 import 'package:foliopod/widgets/pod_refresh_action.dart';
 
 class AppScaffold extends StatefulWidget {
@@ -48,9 +49,16 @@ class _AppScaffoldState extends State<AppScaffold> {
     // holding up startup — foreign balances show ≈ A\$ — until rates
     // arrive. 20260729 gjw
 
-    unawaited(ExchangeService.init().then((_) {
-      if (mounted) setState(() {});
-    }));
+    unawaited(
+      ExchangeService.init().then((_) {
+        if (mounted) setState(() {});
+      }),
+    );
+    unawaited(
+      PriceService.init().then((_) {
+        if (mounted) setState(() {});
+      }),
+    );
 
     provider.setStartupPhase(StartupPhase.unlocking);
     try {
@@ -62,11 +70,33 @@ class _AppScaffoldState extends State<AppScaffold> {
       setState(() => _isKeySaved = true);
       provider.setStartupPhase(StartupPhase.loading);
       await provider.loadFromPod();
+
+      // Prices for whatever shareholdings were loaded, in the background
+      // so a slow or blocked provider never delays the app. 20260729 gjw
+
+      unawaited(
+        PriceService.refresh(provider.heldSymbols).then((updated) {
+          if (updated > 0 && mounted) setState(() {});
+        }),
+      );
     } on Exception catch (e) {
       debugPrint('[AppScaffold] key/load error: $e');
     } finally {
       provider.setStartupPhase(StartupPhase.ready);
     }
+  }
+
+  /// Reload the accounts from the Pod and refresh the market prices and
+  /// exchange rates alongside. The returned flag reports whether the Pod
+  /// data itself changed, which is what the refresh action reports.
+  /// 20260729 gjw
+  Future<bool> _refreshAll() async {
+    final provider = context.read<AppProvider>();
+    final changed = await provider.refreshFromPod();
+    await ExchangeService.refresh();
+    await PriceService.refresh(provider.heldSymbols, force: true);
+    if (mounted) setState(() {});
+    return changed;
   }
 
   @override
@@ -90,10 +120,7 @@ class _AppScaffoldState extends State<AppScaffold> {
               'https://github.com/gjwgit/foliopod/blob/dev/CHANGELOG.md',
         ),
         actions: [
-          buildPodRefreshAction(
-            context: context,
-            onRefresh: context.read<AppProvider>().refreshFromPod,
-          ),
+          buildPodRefreshAction(context: context, onRefresh: _refreshAll),
         ],
       ),
       menu: [

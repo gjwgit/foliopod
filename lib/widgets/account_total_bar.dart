@@ -15,6 +15,7 @@ import 'package:markdown_tooltip/markdown_tooltip.dart';
 
 import 'package:foliopod/models/account.dart';
 import 'package:foliopod/services/exchange_service.dart';
+import 'package:foliopod/services/portfolio_service.dart';
 
 class AccountTotalBar extends StatelessWidget {
   final List<Account> accounts;
@@ -63,8 +64,8 @@ the interest earned since 1 July.
     var interestFY = 0.0;
     var unconverted = 0;
     for (final a in accounts) {
-      final b = ExchangeService.toAud(a.currentBalance, a.currency);
-      final i = ExchangeService.toAud(a.interestFY, a.currency);
+      final b = PortfolioService.audValue(a);
+      final i = PortfolioService.audIncomeFY(a);
       if (b == null || i == null) {
         unconverted++;
       } else {
@@ -90,7 +91,7 @@ the interest earned since 1 July.
           if (unconverted > 0) ...[
             const SizedBox(width: 8),
             Text(
-              '($unconverted awaiting rates)',
+              '($unconverted awaiting prices/rates)',
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ],

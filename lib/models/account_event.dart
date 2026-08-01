@@ -11,6 +11,8 @@ library;
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 
+import 'package:foliopod/services/money_format.dart' show formatUnits;
+
 const _uuid = Uuid();
 
 // ── Enums ─────────────────────────────────────────────────────────────────────
@@ -21,7 +23,11 @@ enum AccountEventType {
   interest,
   deposit,
   rateChange,
-  balanceUpdate;
+  balanceUpdate,
+  // Shareholding entries. 20260729 gjw
+  buy,
+  sell,
+  dividend;
 
   String get label => switch (this) {
     created => 'Opened',
@@ -29,6 +35,9 @@ enum AccountEventType {
     deposit => 'Deposit',
     rateChange => 'Rate Change',
     balanceUpdate => 'Balance Update',
+    buy => 'Buy',
+    sell => 'Sell',
+    dividend => 'Dividend',
   };
 }
 
@@ -44,6 +53,10 @@ enum AccountEventType {
 /// - interest: [amount] is the base interest credited and [bonus] any
 ///   bonus interest credited with it; both add to the balance.
 /// - deposit: [amount] is the sum deposited into the account.
+/// - buy / sell: [amount] is the number of units traded and [price] the
+///   per-unit price paid or received.
+/// - dividend: [amount] is the cash dividend credited; units are
+///   unchanged.
 /// - rateChange: [rate] is the new rate; [previous] records the old rate.
 /// - balanceUpdate: [amount] is the new balance; [previous] the old balance.
 ///
@@ -59,6 +72,11 @@ class AccountEvent {
   /// interest entry (banks often pay base and bonus interest as one
   /// transaction). 20260727 gjw
   final double? bonus;
+
+  /// Per-unit price for a buy or sell entry, in the account's currency.
+  /// Recorded for the history; valuation always uses the latest market
+  /// price rather than this. 20260729 gjw
+  final double? price;
 
   final double? rate;
 
@@ -77,6 +95,7 @@ class AccountEvent {
     required this.type,
     this.amount,
     this.bonus,
+    this.price,
     this.rate,
     this.previous,
     this.balance,
@@ -94,6 +113,7 @@ class AccountEvent {
     'type': type.name,
     if (amount != null) 'amount': amount,
     if (bonus != null) 'bonus': bonus,
+    if (price != null) 'price': price,
     if (rate != null) 'rate': rate,
     if (previous != null) 'previous': previous,
     if (balance != null) 'balance': balance,
@@ -111,6 +131,7 @@ class AccountEvent {
     ),
     amount: (j['amount'] as num?)?.toDouble(),
     bonus: (j['bonus'] as num?)?.toDouble(),
+    price: (j['price'] as num?)?.toDouble(),
     rate: (j['rate'] as num?)?.toDouble(),
     previous: (j['previous'] as num?)?.toDouble(),
     balance: (j['balance'] as num?)?.toDouble(),
@@ -122,6 +143,7 @@ class AccountEvent {
     AccountEventType? type,
     Object? amount = _sentinel,
     Object? bonus = _sentinel,
+    Object? price = _sentinel,
     Object? rate = _sentinel,
     Object? previous = _sentinel,
     Object? balance = _sentinel,
@@ -132,6 +154,7 @@ class AccountEvent {
     type: type ?? this.type,
     amount: amount == _sentinel ? this.amount : amount as double?,
     bonus: bonus == _sentinel ? this.bonus : bonus as double?,
+    price: price == _sentinel ? this.price : price as double?,
     rate: rate == _sentinel ? this.rate : rate as double?,
     previous: previous == _sentinel ? this.previous : previous as double?,
     balance: balance == _sentinel ? this.balance : balance as double?,
@@ -149,28 +172,44 @@ class AccountEvent {
 
   /// One-line human description of the event, used in history listings.
   /// Amounts are in the owning account's currency; pass its display
-  /// [symbol] (see currencySymbol in money_format.dart). 20260729 gjw
-  String describe({String symbol = '\$'}) => switch (type) {
+  /// [symbol] (see currencySymbol in money_format.dart). For a
+  /// shareholding pass its [ticker], which switches the quantity-bearing
+  /// entries from money to units. 20260729 gjw
+  String describe({String symbol = '\$', String? ticker}) => switch (type) {
     AccountEventType.created =>
-      'Opened with $symbol${_money.format(amount ?? 0)}'
-          '${rate != null ? ' at ${_rateStr(rate!)}' : ''}',
+      ticker != null
+          ? 'Opened with ${formatUnits(amount ?? 0)} $ticker'
+          : 'Opened with $symbol${_money.format(amount ?? 0)}'
+                '${rate != null ? ' at ${_rateStr(rate!)}' : ''}',
     AccountEventType.interest =>
       bonus != null && bonus! > 0
           ? 'Interest $symbol${_money.format(totalAmount)} '
                 '($symbol${_money.format(amount ?? 0)} + '
                 '$symbol${_money.format(bonus!)})'
           : 'Interest $symbol${_money.format(amount ?? 0)}',
-    AccountEventType.deposit =>
-      'Deposit $symbol${_money.format(amount ?? 0)}',
+    AccountEventType.deposit => 'Deposit $symbol${_money.format(amount ?? 0)}',
     AccountEventType.rateChange =>
       'Rate '
           '${previous != null ? '${_rateStr(previous!)} → ' : ''}'
           '${_rateStr(rate ?? 0)}',
     AccountEventType.balanceUpdate =>
-      'Balance '
-          '${previous != null ? '$symbol${_money.format(previous!)} → ' : ''}'
-          '$symbol${_money.format(amount ?? 0)}',
+      ticker != null
+          ? 'Units '
+                '${previous != null ? '${formatUnits(previous!)} → ' : ''}'
+                '${formatUnits(amount ?? 0)} $ticker'
+          : 'Balance '
+                '${previous != null ? '$symbol${_money.format(previous!)} → ' : ''}'
+                '$symbol${_money.format(amount ?? 0)}',
+    AccountEventType.buy => _trade('Buy', symbol, ticker),
+    AccountEventType.sell => _trade('Sell', symbol, ticker),
+    AccountEventType.dividend =>
+      'Dividend $symbol${_money.format(amount ?? 0)}',
   };
+
+  /// `Buy 50 MSFT @ US\$420.00` — the price is included when recorded.
+  String _trade(String verb, String symbol, String? ticker) =>
+      '$verb ${formatUnits(amount ?? 0)} ${ticker ?? 'units'}'
+      '${price != null ? ' @ $symbol${_money.format(price!)}' : ''}';
 }
 
 const _sentinel = Object();
