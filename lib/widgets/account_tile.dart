@@ -37,11 +37,21 @@ class AccountTile extends StatelessWidget {
   /// Minimum tile width at which the change-since-1-July column shows.
   static const _wideTile = 560.0;
 
-  /// A shareholding reads as a chart, a closed account as a padlock, and
-  /// a cash account as a bank. 20260730 gjw
+  /// A distinct icon per kind of account so the list reads at a glance:
+  /// a piggy bank for savings, exchange arrows for an everyday
+  /// transaction account, a clock for a term deposit, a house for an
+  /// offset, and a chart for a shareholding. A closed account shows a
+  /// padlock whatever its kind. 20260730 gjw
   IconData get _leadingIcon {
     if (account.isClosed) return Icons.lock_outline;
-    return account.isShares ? Icons.show_chart : Icons.account_balance;
+    return switch (account.type) {
+      AccountType.savings => Icons.savings_outlined,
+      AccountType.transaction => Icons.swap_horiz,
+      AccountType.termDeposit => Icons.schedule,
+      AccountType.offset => Icons.home_outlined,
+      AccountType.shares => Icons.show_chart,
+      AccountType.other => Icons.account_balance,
+    };
   }
 
   /// The change in value since 1 July, in the account's own currency.
