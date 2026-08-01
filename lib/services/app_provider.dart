@@ -16,6 +16,7 @@ import 'package:foliopod/constants/app.dart';
 import 'package:foliopod/models/account.dart';
 import 'package:foliopod/models/account_event.dart';
 import 'package:foliopod/services/pod_service.dart';
+import 'package:foliopod/services/price_service.dart';
 
 /// Phases of app startup for phase-aware busy feedback.
 enum StartupPhase { idle, unlocking, loading, ready }
@@ -67,6 +68,55 @@ class AppProvider extends ChangeNotifier {
     for (final a in _accounts)
       if (a.isShares && a.symbol != null && a.symbol!.isNotEmpty) a.symbol!,
   };
+
+  /// Append a price-update entry to every shareholding whose freshly
+  /// fetched price differs from the last one recorded, so the history
+  /// carries the price series. Prices that have not moved add nothing,
+  /// and at most one mark is recorded per calendar day, which keeps the
+  /// history to a readable daily series rather than an entry every time
+  /// the app refreshes. Returns the number of accounts updated; the
+  /// caller saves. 20260730 gjw
+  int recordPriceUpdates({DateTime? at}) {
+    final when = at ?? DateTime.now();
+    final result = <Account>[];
+    var updated = 0;
+    for (final a in _accounts) {
+      if (!_shouldRecordPrice(a, when)) {
+        result.add(a);
+        continue;
+      }
+      result.add(
+        a.applyEvent(
+          AccountEvent(
+            date: when,
+            type: AccountEventType.priceUpdate,
+            price: PriceService.price(a.symbol),
+          ),
+        ),
+      );
+      updated++;
+    }
+    if (updated > 0) {
+      _accounts = result;
+      notifyListeners();
+    }
+    return updated;
+  }
+
+  /// Whether to add a price mark for [account] on [when]: only for a
+  /// shareholding with a freshly fetched price, only when that price has
+  /// moved, and only once per calendar day. The price on display is
+  /// always the latest fetched one, so skipping the rest of the day's
+  /// movements thins the history without staling the figures.
+  /// 20260730 gjw
+  bool _shouldRecordPrice(Account account, DateTime when) {
+    if (!account.isShares || account.symbol == null) return false;
+    final fetched = PriceService.price(account.symbol);
+    if (fetched == null) return false;
+    if (account.hasPriceOn(when)) return false;
+    final recorded = account.currentPrice;
+    return recorded == null || (fetched - recorded).abs() >= 0.0001;
+  }
 
   /// Total balance across open accounts.
   double get totalBalance =>

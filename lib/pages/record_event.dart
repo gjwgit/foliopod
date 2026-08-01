@@ -68,6 +68,7 @@ class _RecordEventState extends State<RecordEvent> {
           AccountEventType.buy,
           AccountEventType.sell,
           AccountEventType.dividend,
+          AccountEventType.priceUpdate,
           AccountEventType.balanceUpdate,
         ]
       : const [
@@ -78,6 +79,10 @@ class _RecordEventState extends State<RecordEvent> {
         ];
 
   bool get _isRate => _type == AccountEventType.rateChange;
+
+  /// A newly observed share price: the value entered is the price, the
+  /// shareholding counterpart of a rate change. 20260730 gjw
+  bool get _isPriceUpdate => _type == AccountEventType.priceUpdate;
 
   bool get _isInterest => _type == AccountEventType.interest;
 
@@ -120,6 +125,9 @@ class _RecordEventState extends State<RecordEvent> {
 - **Sell** — units disposed of; subtracted from the holding.
 - **Dividend** — cash dividend received; counts as income earned and
   leaves the units unchanged.
+- **Price Update** — a newly observed share price; the old price is
+  kept in the history. One is recorded automatically each day the
+  fetched price has moved.
 - **Balance Update** — set the units held to match your broker; the
   old figure is kept in the history.
 
@@ -132,6 +140,7 @@ class _RecordEventState extends State<RecordEvent> {
     AccountEventType.buy => 'Units bought',
     AccountEventType.sell => 'Units sold',
     AccountEventType.dividend => 'Dividend received',
+    AccountEventType.priceUpdate => 'New share price',
     _ => _shares ? 'Units held' : 'New balance',
   };
 
@@ -215,10 +224,12 @@ class _RecordEventState extends State<RecordEvent> {
       AccountEvent(
         date: _date,
         type: _type,
-        price: _isTrade && _price.text.trim().isNotEmpty
-            ? parseNum(_price.text)
-            : null,
-        amount: _isRate ? null : v,
+        price: _isPriceUpdate
+            ? v
+            : (_isTrade && _price.text.trim().isNotEmpty
+                  ? parseNum(_price.text)
+                  : null),
+        amount: _isRate || _isPriceUpdate ? null : v,
         bonus: bonus,
         rate: _isRate ? v : null,
         note: note,

@@ -58,6 +58,7 @@ class _EventEditState extends State<EventEdit> {
           AccountEventType.buy,
           AccountEventType.sell,
           AccountEventType.dividend,
+          AccountEventType.priceUpdate,
           AccountEventType.balanceUpdate,
         ]
       : const [
@@ -72,6 +73,8 @@ class _EventEditState extends State<EventEdit> {
   bool get _isCreated => widget.event.type == AccountEventType.created;
 
   bool get _isRate => _type == AccountEventType.rateChange;
+
+  bool get _isPriceUpdate => _type == AccountEventType.priceUpdate;
 
   bool get _isInterest => _type == AccountEventType.interest;
 
@@ -93,6 +96,7 @@ class _EventEditState extends State<EventEdit> {
     AccountEventType.buy => 'Units bought',
     AccountEventType.sell => 'Units sold',
     AccountEventType.dividend => 'Dividend received',
+    AccountEventType.priceUpdate => 'New share price',
     AccountEventType.balanceUpdate => _shares ? 'Units held' : 'New balance',
   };
 
@@ -134,10 +138,15 @@ class _EventEditState extends State<EventEdit> {
     _date = e.date;
     // For a rate change the value field carries the rate; otherwise the
     // amount. For created events both fields are shown.
-    final v = _type == AccountEventType.rateChange ? e.rate : e.amount;
+    final v = switch (_type) {
+      AccountEventType.rateChange => e.rate,
+      AccountEventType.priceUpdate => e.price,
+      _ => e.amount,
+    };
     _value = TextEditingController(
       text: switch (_type) {
         AccountEventType.rateChange => (v ?? 0).toStringAsFixed(2),
+        AccountEventType.priceUpdate => formatMoney(v ?? 0),
         AccountEventType.buy || AccountEventType.sell => formatUnits(v ?? 0),
         _ when _shares && _type != AccountEventType.dividend => formatUnits(
           v ?? 0,
@@ -190,13 +199,15 @@ class _EventEditState extends State<EventEdit> {
       result = widget.event.copyWith(
         date: _date,
         type: _type,
-        amount: _isRate ? null : v,
+        amount: _isRate || _isPriceUpdate ? null : v,
         bonus: _isInterest && _bonus.text.trim().isNotEmpty
             ? parseNum(_bonus.text)
             : null,
-        price: _isTrade && _price.text.trim().isNotEmpty
-            ? parseNum(_price.text)
-            : null,
+        price: _isPriceUpdate
+            ? v
+            : (_isTrade && _price.text.trim().isNotEmpty
+                  ? parseNum(_price.text)
+                  : null),
         rate: _isRate ? v : null,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       );
@@ -257,8 +268,8 @@ class _EventEditState extends State<EventEdit> {
 
 Changing the type changes how the value is applied when the history
 is replayed: buys and deposits add, sells subtract, a rate change
-sets the rate, a dividend leaves the holding unchanged, and a balance
-update sets the figure outright.
+sets the rate, a price update sets the share price, a dividend leaves
+the holding unchanged, and a balance update sets the figure outright.
 
 ''',
                   child: DropdownButtonFormField<AccountEventType>(

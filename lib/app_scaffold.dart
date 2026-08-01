@@ -76,7 +76,8 @@ class _AppScaffoldState extends State<AppScaffold> {
 
       unawaited(
         PriceService.refresh(provider.heldSymbols).then((updated) {
-          if (updated > 0 && mounted) setState(() {});
+          if (updated == 0 || !mounted) return;
+          _recordPrices(provider);
         }),
       );
     } on Exception catch (e) {
@@ -84,6 +85,15 @@ class _AppScaffoldState extends State<AppScaffold> {
     } finally {
       provider.setStartupPhase(StartupPhase.ready);
     }
+  }
+
+  /// Add a price-update entry for any holding whose price has moved and
+  /// save the result, so the history carries the price series.
+  /// 20260730 gjw
+  Future<void> _recordPrices(AppProvider provider) async {
+    final recorded = provider.recordPriceUpdates();
+    if (recorded > 0) await provider.saveToPod();
+    if (mounted) setState(() {});
   }
 
   /// Reload the accounts from the Pod and refresh the market prices and
@@ -95,7 +105,7 @@ class _AppScaffoldState extends State<AppScaffold> {
     final changed = await provider.refreshFromPod();
     await ExchangeService.refresh();
     await PriceService.refresh(provider.heldSymbols, force: true);
-    if (mounted) setState(() {});
+    await _recordPrices(provider);
     return changed;
   }
 

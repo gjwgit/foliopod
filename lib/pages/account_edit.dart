@@ -87,8 +87,13 @@ class _AccountEditState extends State<AccountEdit> {
     _institution = TextEditingController(text: a?.institution ?? '');
     _number = TextEditingController(text: a?.number ?? '');
     _symbol = TextEditingController(text: a?.symbol ?? '');
+    // Show the price the holding is currently marked at, however it was
+    // recorded. Like the balance and rate, it is only editable when the
+    // account is new; afterwards it changes through Price Update
+    // entries. 20260730 gjw
+    final markedPrice = a?.currentPrice ?? a?.manualPrice;
     _price = TextEditingController(
-      text: a?.manualPrice != null ? formatMoney(a!.manualPrice!) : '',
+      text: markedPrice != null ? formatMoney(markedPrice) : '',
     );
     _balance = TextEditingController(
       text: a != null ? formatMoney(a.currentBalance) : '',
@@ -158,13 +163,24 @@ update it.
 
 ''';
 
-  String get _priceHelp => '''
+  String get _priceHelp => _isNew
+      ? '''
 
-**Fallback price**
+**Opening price**
 
-An optional per-unit price used to value the holding when no market
-price has been fetched — offline, or when the price provider is
-unavailable. A fetched price always takes precedence.
+The share price to start from, recorded as part of the opening entry.
+It values the holding until a market price is fetched, so it is worth
+setting when working offline.
+
+'''
+      : '''
+
+**Share price**
+
+The price the holding is currently marked at. It changes through
+recorded Price Update entries — once a day when the fetched price has
+moved, or by hand from the Record button — so the history keeps the
+price series.
 
 ''';
 
@@ -199,8 +215,8 @@ change.
         currency: _currency,
         number: _number.text.trim().isEmpty ? null : _number.text.trim(),
         symbol: _symbolOrNull,
-        manualPrice: parseNum(_price.text),
         openingBalance: parseNum(_balance.text) ?? 0,
+        price: parseNum(_price.text),
         rate: parseNum(_rate.text) ?? 0,
         date: _opened,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
@@ -215,7 +231,6 @@ change.
         currency: _currency,
         number: _number.text.trim().isEmpty ? null : _number.text.trim(),
         symbol: _symbolOrNull,
-        manualPrice: parseNum(_price.text),
         isClosed: _isClosed,
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       );
@@ -367,9 +382,12 @@ above to the one the shares trade in.
                                     const TextInputType.numberWithOptions(
                                       decimal: true,
                                     ),
-                                decoration: const InputDecoration(
-                                  labelText: 'Fallback price',
-                                  border: OutlineInputBorder(),
+                                enabled: _isNew,
+                                decoration: InputDecoration(
+                                  labelText: _isNew
+                                      ? 'Opening price'
+                                      : 'Share price',
+                                  border: const OutlineInputBorder(),
                                   isDense: true,
                                 ),
                               ),

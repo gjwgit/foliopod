@@ -27,7 +27,11 @@ enum AccountEventType {
   // Shareholding entries. 20260729 gjw
   buy,
   sell,
-  dividend;
+  dividend,
+  // A newly observed share price — the shareholding counterpart of a
+  // rate change. Recorded automatically whenever a fetched price
+  // differs from the last one, and enterable by hand. 20260730 gjw
+  priceUpdate;
 
   String get label => switch (this) {
     created => 'Opened',
@@ -38,6 +42,7 @@ enum AccountEventType {
     buy => 'Buy',
     sell => 'Sell',
     dividend => 'Dividend',
+    priceUpdate => 'Price Update',
   };
 }
 
@@ -57,6 +62,8 @@ enum AccountEventType {
 ///   per-unit price paid or received.
 /// - dividend: [amount] is the cash dividend credited; units are
 ///   unchanged.
+/// - priceUpdate: [price] is the newly observed share price and
+///   [previous] the price it replaces; units are unchanged.
 /// - rateChange: [rate] is the new rate; [previous] records the old rate.
 /// - balanceUpdate: [amount] is the new balance; [previous] the old balance.
 ///
@@ -204,6 +211,10 @@ class AccountEvent {
     AccountEventType.sell => _trade('Sell', symbol, ticker),
     AccountEventType.dividend =>
       'Dividend $symbol${_money.format(amount ?? 0)}',
+    AccountEventType.priceUpdate =>
+      'Price '
+          '${previous != null ? '$symbol${_money.format(previous!)} → ' : ''}'
+          '$symbol${_money.format(price ?? 0)}',
   };
 
   /// `Buy 50 MSFT @ US\$420.00` — the price is included when recorded.

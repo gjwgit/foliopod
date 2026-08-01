@@ -60,8 +60,15 @@ class Account {
   /// fetch the market price. Null for cash accounts. 20260729 gjw
   final String? symbol;
 
-  /// Fallback per-unit price, used when no market price has been
-  /// fetched (offline, or the provider is unavailable). 20260729 gjw
+  /// The last share price recorded in the history, derived by replaying
+  /// the opening and price-update entries. Held on the account so a
+  /// holding still values from Pod data alone, with no local price
+  /// cache. Null until a price has been recorded. 20260730 gjw
+  final double? currentPrice;
+
+  /// Fallback per-unit price from before price history was recorded.
+  /// Retained so older data keeps working; new accounts record their
+  /// opening price as an entry instead. 20260729 gjw
   final double? manualPrice;
 
   /// ISO currency code of the account's balances, e.g. AUD, USD, SGD.
@@ -85,6 +92,7 @@ class Account {
     this.type = AccountType.savings,
     this.number,
     this.symbol,
+    this.currentPrice,
     this.manualPrice,
     this.currency = baseCurrency,
     this.currentBalance = 0,
@@ -106,6 +114,7 @@ class Account {
     String currency = baseCurrency,
     double openingBalance = 0,
     double rate = 0,
+    double? price,
     DateTime? date,
     String? note,
   }) =>
@@ -124,6 +133,7 @@ class Account {
           type: AccountEventType.created,
           amount: openingBalance,
           rate: rate,
+          price: price,
         ),
       );
 
@@ -136,6 +146,7 @@ class Account {
     'type': type.name,
     if (number != null) 'number': number,
     if (symbol != null) 'symbol': symbol,
+    if (currentPrice != null) 'currentPrice': currentPrice,
     if (manualPrice != null) 'manualPrice': manualPrice,
     'currency': currency,
     'currentBalance': currentBalance,
@@ -155,6 +166,7 @@ class Account {
     ),
     number: j['number'] as String?,
     symbol: j['symbol'] as String?,
+    currentPrice: (j['currentPrice'] as num?)?.toDouble(),
     manualPrice: (j['manualPrice'] as num?)?.toDouble(),
     // Accounts stored before multi-currency support default to AUD.
     currency: j['currency'] as String? ?? baseCurrency,
@@ -173,6 +185,7 @@ class Account {
     AccountType? type,
     Object? number = _sentinel,
     Object? symbol = _sentinel,
+    Object? currentPrice = _sentinel,
     Object? manualPrice = _sentinel,
     String? currency,
     double? currentBalance,
@@ -189,6 +202,9 @@ class Account {
     type: type ?? this.type,
     number: number == _sentinel ? this.number : number as String?,
     symbol: symbol == _sentinel ? this.symbol : symbol as String?,
+    currentPrice: currentPrice == _sentinel
+        ? this.currentPrice
+        : currentPrice as double?,
     manualPrice: manualPrice == _sentinel
         ? this.manualPrice
         : manualPrice as double?,
@@ -211,10 +227,12 @@ class Account {
     var ev = event;
     var balance = currentBalance;
     var rate = currentRate;
+    var price = currentPrice;
     switch (event.type) {
       case AccountEventType.created:
         balance = event.amount ?? 0;
         rate = event.rate ?? rate;
+        price = event.price ?? price;
       case AccountEventType.interest:
       case AccountEventType.deposit:
         // For interest, base amount plus any bonus interest. 20260727 gjw
@@ -233,11 +251,15 @@ class Account {
         balance -= event.amount ?? 0;
       case AccountEventType.dividend:
         break;
+      case AccountEventType.priceUpdate:
+        ev = ev.copyWith(previous: currentPrice);
+        price = event.price ?? price;
     }
     ev = ev.copyWith(balance: balance);
     return copyWith(
       currentBalance: balance,
       currentRate: rate,
+      currentPrice: price,
       events: [...events, ev],
     );
   }
@@ -255,7 +277,12 @@ class Account {
         final c = x.value.date.compareTo(y.value.date);
         return c != 0 ? c : x.key.compareTo(y.key);
       });
-    var account = copyWith(currentBalance: 0, currentRate: 0, events: []);
+    var account = copyWith(
+      currentBalance: 0,
+      currentRate: 0,
+      currentPrice: null,
+      events: [],
+    );
     for (final e in indexed) {
       account = account.applyEvent(
         e.value.copyWith(previous: null, balance: null),
@@ -287,6 +314,53 @@ class Account {
 
   /// Interest earned this financial year.
   double get interestFY => earned(from: fyStart(DateTime.now()));
+
+  /// The balance (cash) or units held (shares) immediately before
+  /// [date], taken from the running balance on the latest earlier entry.
+  /// Zero when the account had no entries by then. 20260730 gjw
+  double balanceAt(DateTime date) {
+    AccountEvent? latest;
+    for (final e in events) {
+      if (!e.date.isBefore(date)) continue;
+      // On equal dates the later entry in the list wins, matching the
+      // order the replay applies them in.
+      if (latest == null || !e.date.isBefore(latest.date)) latest = e;
+    }
+    return latest?.balance ?? 0;
+  }
+
+  /// The share price last recorded before [date], from the opening and
+  /// price-update entries. Trade prices are deliberately excluded: a buy
+  /// or sell is a transaction price, not a market mark. Null when no
+  /// price had been recorded by then. 20260730 gjw
+  double? priceAt(DateTime date) {
+    AccountEvent? latest;
+    for (final e in events) {
+      if (e.price == null) continue;
+      if (e.type != AccountEventType.created &&
+          e.type != AccountEventType.priceUpdate) {
+        continue;
+      }
+      if (!e.date.isBefore(date)) continue;
+      if (latest == null || !e.date.isBefore(latest.date)) latest = e;
+    }
+    return latest?.price;
+  }
+
+  /// Whether a share price has already been recorded on the calendar day
+  /// of [date]. The automatic price series is kept to one mark a day;
+  /// the value shown in the app still tracks the freshest fetched price,
+  /// so only the history is thinned. 20260730 gjw
+  bool hasPriceOn(DateTime date) => events.any(
+    (e) =>
+        e.price != null &&
+        (e.type == AccountEventType.priceUpdate ||
+            e.type == AccountEventType.created) &&
+        _sameDay(e.date, date),
+  );
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   /// Whether this account holds shares rather than cash.
   bool get isShares => type == AccountType.shares;

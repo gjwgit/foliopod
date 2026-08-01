@@ -38,6 +38,7 @@ Williams](https://togaware.com/Graham.Williams.html).
 
 ## 1.0 New Secure Key Handling
 
++ Show improvement since last 1 July [1.0.5 20260802 gjw]
 + Support shares [1.0.4 20260801 gjw]
 + Support currency, but with AUD focus [1.0.3 20260729 gjw]
 + Add EXPORT/IMPORT [1.0.2 20260727 gjw]

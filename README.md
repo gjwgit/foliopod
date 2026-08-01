@@ -48,6 +48,19 @@ same way interest does for a savings account. The holding is valued
 at the latest market price, converted to AUD, and included in the
 totals alongside your cash accounts.
 
+Once a day, when a fetched price differs from the last one recorded, a
+**Price Update** entry is added to the account's history, so the
+history carries a daily price series alongside the transactions. The
+value on display always uses the freshest fetched price, so the daily
+throttle thins the history without staling any figures. You can
+also add one by hand from the Record button — it is the shareholding
+counterpart of a rate change on a savings account. Because the price
+at any past date is known, the accounts list shows the change in value
+since 1 July (on a window wide enough to fit the column), quoted in
+the account's own currency: the exchange rate that applied on 1 July
+is not recorded, so converting it would blend a real value change with
+an unknown currency movement.
+
 Prices come from the Yahoo Finance chart endpoint, which needs no API
 key. It is not an official API: it rate limits and can change without
 notice, so every failure is non-fatal — the last fetched price stays
