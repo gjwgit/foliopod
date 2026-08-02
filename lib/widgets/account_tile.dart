@@ -40,8 +40,9 @@ class AccountTile extends StatelessWidget {
   /// A distinct icon per kind of account so the list reads at a glance:
   /// a piggy bank for savings, exchange arrows for an everyday
   /// transaction account, a clock for a term deposit, a house for an
-  /// offset, and a chart for a shareholding. A closed account shows a
-  /// padlock whatever its kind. 20260730 gjw
+  /// offset, a chart for a shareholding, and a beach umbrella for the
+  /// superannuation that pays for it. A closed account shows a padlock
+  /// whatever its kind. 20260730 gjw
   IconData get _leadingIcon {
     if (account.isClosed) return Icons.lock_outline;
     return switch (account.type) {
@@ -50,8 +51,23 @@ class AccountTile extends StatelessWidget {
       AccountType.termDeposit => Icons.schedule,
       AccountType.offset => Icons.home_outlined,
       AccountType.shares => Icons.show_chart,
+      AccountType.superannuation => Icons.beach_access,
       AccountType.other => Icons.account_balance,
     };
+  }
+
+  /// The line under the holding: the market price for a shareholding,
+  /// the interest rate for a rate-bearing account, and nothing at all
+  /// for a superannuation fund with no crediting rate recorded, where
+  /// `0.00% p.a.` would be noise. 20260731 gjw
+  String? _secondLine(double? price) {
+    if (account.isShares) {
+      return price != null
+          ? '@ ${formatCurrencyAmount(price, account.currency)}'
+          : '@ —';
+    }
+    if (account.isSuper && account.currentRate == 0) return null;
+    return account.rateStr;
   }
 
   /// The change in value since 1 July, in the account's own currency.
@@ -156,6 +172,7 @@ yet.
     final showAud = account.isShares || account.currency != baseCurrency;
     final aud = showAud ? PortfolioService.audValue(account) : null;
     final price = PortfolioService.priceFor(account);
+    final secondLine = _secondLine(price);
     final audRate = account.currency == baseCurrency
         ? null
         : ExchangeService.rateFromAud(account.currency);
@@ -293,24 +310,22 @@ yet.
                           ),
                         ),
                       ),
-                    Text(
-                      account.isShares
-                          ? (price != null
-                                ? '@ ${formatCurrencyAmount(price, account.currency)}'
-                                : '@ —')
-                          : account.rateStr,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: cs.onSurfaceVariant,
+                    if (secondLine != null)
+                      Text(
+                        secondLine,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                        ),
                       ),
-                    ),
                     MarkdownTooltip(
                       message: '''
 
 **Income this FY**
 
 Total earned since 1 July (the current financial year) — interest
-including any bonus interest, or dividends for a shareholding.
+including any bonus interest, dividends for a shareholding, or
+investment earnings for a superannuation fund.
 
 ''',
                       child: Text(

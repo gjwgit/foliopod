@@ -140,6 +140,8 @@ class _AccountEditState extends State<AccountEdit> {
 
   bool get _isShares => _type == AccountType.shares;
 
+  bool get _isSuper => _type == AccountType.superannuation;
+
   /// The ticker in upper case, or null when blank.
   String? get _symbolOrNull =>
       _symbol.text.trim().isEmpty ? null : _symbol.text.trim().toUpperCase();
@@ -149,7 +151,8 @@ class _AccountEditState extends State<AccountEdit> {
 
 **Opening balance**
 
-The opening balance of the account, recorded as the first history
+The opening balance of the account — for a superannuation fund, the
+balance on your latest statement — recorded as the first history
 entry.
 
 '''
@@ -342,9 +345,11 @@ above to the one the shares trade in.
                 else
                   TextFormField(
                     controller: _number,
-                    decoration: const InputDecoration(
-                      labelText: 'BSB / Account number',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: _isSuper
+                          ? 'Member number'
+                          : 'BSB / Account number',
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                   ),
@@ -371,44 +376,48 @@ above to the one the shares trade in.
                         ),
                       ),
                     ),
-                    const Gap(12),
-                    Expanded(
-                      child: _isShares
-                          ? MarkdownTooltip(
-                              message: _priceHelp,
-                              child: TextFormField(
-                                controller: _price,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                enabled: _isNew,
-                                decoration: InputDecoration(
-                                  labelText: _isNew
-                                      ? 'Opening price'
-                                      : 'Share price',
-                                  border: const OutlineInputBorder(),
-                                  isDense: true,
+                    // A super fund has no headline rate, so the balance
+                    // takes the full width. 20260731 gjw
+                    if (!_isSuper) ...[
+                      const Gap(12),
+                      Expanded(
+                        child: _isShares
+                            ? MarkdownTooltip(
+                                message: _priceHelp,
+                                child: TextFormField(
+                                  controller: _price,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  enabled: _isNew,
+                                  decoration: InputDecoration(
+                                    labelText: _isNew
+                                        ? 'Opening price'
+                                        : 'Share price',
+                                    border: const OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
+                                ),
+                              )
+                            : MarkdownTooltip(
+                                message: _rateHelp,
+                                child: TextFormField(
+                                  controller: _rate,
+                                  enabled: _isNew,
+                                  keyboardType:
+                                      const TextInputType.numberWithOptions(
+                                        decimal: true,
+                                      ),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Rate % p.a.',
+                                    border: OutlineInputBorder(),
+                                    isDense: true,
+                                  ),
                                 ),
                               ),
-                            )
-                          : MarkdownTooltip(
-                              message: _rateHelp,
-                              child: TextFormField(
-                                controller: _rate,
-                                enabled: _isNew,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                decoration: const InputDecoration(
-                                  labelText: 'Rate % p.a.',
-                                  border: OutlineInputBorder(),
-                                  isDense: true,
-                                ),
-                              ),
-                            ),
-                    ),
+                      ),
+                    ],
                   ],
                 ),
                 const Gap(12),

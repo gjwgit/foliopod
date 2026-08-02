@@ -107,6 +107,8 @@ class AccountHistory extends StatelessWidget {
   /// The middle clause of the subheading: the market price for a
   /// shareholding, or the interest rate for a cash account. 20260729 gjw
   String _rateOrPrice(Account account) {
+    // A super fund has no headline rate to quote.
+    if (account.isSuper && account.currentRate == 0) return '';
     if (!account.isShares) return 'at ${account.rateStr}';
     final price = PortfolioService.priceFor(account);
     return price != null
@@ -115,6 +117,17 @@ class AccountHistory extends StatelessWidget {
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
+
+  /// The subheading above the log: what is held, what it is worth, the
+  /// rate or price where there is one, and the income so far this
+  /// financial year. 20260731 gjw
+  String _summary(Account account) {
+    final middle = _rateOrPrice(account);
+    return 'Currently ${account.holdingStr}${_audNote(account)}'
+        '${middle.isEmpty ? '' : ' $middle'} — '
+        '${account.interestFYStr} ${account.incomeLabel} since 1 July. '
+        'Tap an entry to edit it.';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -172,11 +185,7 @@ note.
             // can be copied; it carries its own selection handling, no
             // SelectionArea required. 20260729 gjw
             SelectableText(
-              'Currently ${account.holdingStr}'
-              '${_audNote(account)} ${_rateOrPrice(account)} — '
-              '${account.interestFYStr} '
-              '${account.isShares ? 'dividends' : 'interest'} '
-              'since 1 July. Tap an entry to edit it.',
+              _summary(account),
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
             const Divider(),

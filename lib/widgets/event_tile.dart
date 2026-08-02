@@ -53,6 +53,9 @@ class EventTile extends StatelessWidget {
     AccountEventType.sell => Icons.sell_outlined,
     AccountEventType.dividend => Icons.payments_outlined,
     AccountEventType.priceUpdate => Icons.show_chart,
+    AccountEventType.contribution => Icons.input,
+    AccountEventType.earnings => Icons.trending_up,
+    AccountEventType.fee => Icons.money_off,
   };
 
   @override

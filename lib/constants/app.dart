@@ -51,6 +51,7 @@ const String aboutText =
     '- Accounts in any currency, with balances normalised to AUD using '
     'the ECB daily reference rates (frankfurter.app)\n'
     '- Shareholdings valued at the latest market price, in AUD\n'
+    '- Superannuation funds with contributions, earnings and fees\n'
     '- Every new share price recorded in the history, giving the change '
     'in value since 1 July\n'
     '- Tap an account for its transaction log in a popup\n'

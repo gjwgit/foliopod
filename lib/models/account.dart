@@ -28,6 +28,9 @@ enum AccountType {
   // A holding of shares rather than cash: the balance counts units of
   // [Account.symbol] and the value comes from the market. 20260729 gjw
   shares,
+  // A superannuation fund: contributions in, investment earnings that
+  // may be negative, and fees out. 20260731 gjw
+  superannuation,
   other;
 
   String get label => switch (this) {
@@ -36,6 +39,7 @@ enum AccountType {
     transaction => 'Transaction',
     offset => 'Offset',
     shares => 'Shares',
+    superannuation => 'Superannuation',
     other => 'Other',
   };
 }
@@ -254,6 +258,13 @@ class Account {
       case AccountEventType.priceUpdate:
         ev = ev.copyWith(previous: currentPrice);
         price = event.price ?? price;
+      // Superannuation: contributions and earnings add to the balance
+      // (earnings may be negative), fees come off it. 20260731 gjw
+      case AccountEventType.contribution:
+      case AccountEventType.earnings:
+        balance += event.amount ?? 0;
+      case AccountEventType.fee:
+        balance -= event.amount ?? 0;
     }
     ev = ev.copyWith(balance: balance);
     return copyWith(
@@ -294,14 +305,16 @@ class Account {
   // ── Helpers ────────────────────────────────────────────────────────────────
 
   /// Sum of the income credited in [from, to): interest (base plus
-  /// bonus) for a cash account, dividends for a shareholding, and
-  /// optionally deposits. Null bounds are unbounded.
+  /// bonus) for a cash account, dividends for a shareholding, earnings
+  /// for a superannuation fund, and optionally deposits. Null bounds are
+  /// unbounded.
   double earned({DateTime? from, DateTime? to, bool includeDeposits = false}) =>
       events
           .where(
             (e) =>
                 (e.type == AccountEventType.interest ||
                     e.type == AccountEventType.dividend ||
+                    e.type == AccountEventType.earnings ||
                     (includeDeposits && e.type == AccountEventType.deposit)) &&
                 (from == null || !e.date.isBefore(from)) &&
                 (to == null || e.date.isBefore(to)),
@@ -364,6 +377,17 @@ class Account {
 
   /// Whether this account holds shares rather than cash.
   bool get isShares => type == AccountType.shares;
+
+  /// Whether this account is a superannuation fund. 20260731 gjw
+  bool get isSuper => type == AccountType.superannuation;
+
+  /// What the income earned on this kind of account is called, for use
+  /// in prose. 20260731 gjw
+  String get incomeLabel => switch (type) {
+    AccountType.shares => 'dividends',
+    AccountType.superannuation => 'earnings',
+    _ => 'interest',
+  };
 
   /// The holding as shown to the user: `100 MSFT` for a shareholding,
   /// or the formatted balance for a cash account. 20260729 gjw

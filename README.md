@@ -38,6 +38,21 @@ recomputed by replaying the history in date order. The Accounts view
 shows each account's balance, rate, and interest earned this
 financial year (1 July), along with totals across your open accounts.
 
+## Superannuation
+
+An account of type **Superannuation** tracks a fund balance through
+the entries a fund statement gives you: **Contribution** for money
+paid in by you or your employer, **Earnings** for the investment
+return credited — entered negative for a loss — and **Fee** for
+administration, investment and insurance charges. Earnings count as
+income for the year in the same way interest does for a savings
+account, so the FY figure and the change since 1 July both work as
+they do elsewhere. A super fund has no headline interest rate, so
+none is asked for or shown.
+
+Fees are available on ordinary cash accounts too, which previously
+had no way to record money going out other than a balance update.
+
 ## Shareholdings
 
 An account of type **Shares** holds units of a ticker rather than

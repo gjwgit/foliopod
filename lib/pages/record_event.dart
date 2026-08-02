@@ -71,9 +71,17 @@ class _RecordEventState extends State<RecordEvent> {
           AccountEventType.priceUpdate,
           AccountEventType.balanceUpdate,
         ]
+      : _superFund
+      ? const [
+          AccountEventType.contribution,
+          AccountEventType.earnings,
+          AccountEventType.fee,
+          AccountEventType.balanceUpdate,
+        ]
       : const [
           AccountEventType.interest,
           AccountEventType.deposit,
+          AccountEventType.fee,
           AccountEventType.rateChange,
           AccountEventType.balanceUpdate,
         ];
@@ -98,9 +106,26 @@ class _RecordEventState extends State<RecordEvent> {
 
   bool get _shares => widget.account.isShares;
 
+  bool get _superFund => widget.account.isSuper;
+
   /// Prefix for a money field in the account's currency; null for a
   /// units or rate field.
   String? get _moneyPrefix => '${currencySymbol(widget.account.currency)} ';
+
+  static const _superTypeHelp = '''
+
+**What to record**
+
+- **Contribution** — money paid into the fund by you or your
+  employer; added to the balance.
+- **Earnings** — the investment return credited by the fund. Enter a
+  negative amount for a loss. Counts as income earned.
+- **Fee** — an administration, investment or insurance charge
+  deducted from the balance.
+- **Balance Update** — set the balance to match your fund statement;
+  the old balance is kept in the history.
+
+''';
 
   static const _cashTypeHelp = '''
 
@@ -108,6 +133,8 @@ class _RecordEventState extends State<RecordEvent> {
 
 - **Interest** — interest credited by the bank; added to the balance.
 - **Deposit** — money deposited into the account; added to the
+  balance.
+- **Fee** — an account or transaction charge; deducted from the
   balance.
 - **Rate Change** — the bank changed the interest rate; the old rate is
   kept in the history.
@@ -133,6 +160,12 @@ class _RecordEventState extends State<RecordEvent> {
 
 ''';
 
+  /// The dropdown's guidance, matching the kind of account.
+  String get _typeHelp {
+    if (_shares) return _sharesTypeHelp;
+    return _superFund ? _superTypeHelp : _cashTypeHelp;
+  }
+
   String get _valueLabel => switch (_type) {
     AccountEventType.interest => 'Base interest',
     AccountEventType.deposit => 'Amount deposited',
@@ -141,6 +174,9 @@ class _RecordEventState extends State<RecordEvent> {
     AccountEventType.sell => 'Units sold',
     AccountEventType.dividend => 'Dividend received',
     AccountEventType.priceUpdate => 'New share price',
+    AccountEventType.contribution => 'Contribution',
+    AccountEventType.earnings => 'Earnings (negative for a loss)',
+    AccountEventType.fee => 'Fee charged',
     _ => _shares ? 'Units held' : 'New balance',
   };
 
@@ -154,6 +190,9 @@ class _RecordEventState extends State<RecordEvent> {
       AccountEventType.deposit => widget.account.currentBalance + v + b,
       AccountEventType.buy => widget.account.currentBalance + v,
       AccountEventType.sell => widget.account.currentBalance - v,
+      AccountEventType.contribution ||
+      AccountEventType.earnings => widget.account.currentBalance + v,
+      AccountEventType.fee => widget.account.currentBalance - v,
       // A dividend is cash paid out: the units held do not change.
       _ => widget.account.currentBalance,
     };
@@ -277,7 +316,7 @@ class _RecordEventState extends State<RecordEvent> {
               ),
               const Gap(12),
               MarkdownTooltip(
-                message: _shares ? _sharesTypeHelp : _cashTypeHelp,
+                message: _typeHelp,
                 child: DropdownButtonFormField<AccountEventType>(
                   initialValue: _type,
                   decoration: const InputDecoration(

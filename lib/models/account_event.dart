@@ -31,7 +31,12 @@ enum AccountEventType {
   // A newly observed share price — the shareholding counterpart of a
   // rate change. Recorded automatically whenever a fetched price
   // differs from the last one, and enterable by hand. 20260730 gjw
-  priceUpdate;
+  priceUpdate,
+  // Superannuation entries. Earnings may be negative when the fund's
+  // investments fall. 20260731 gjw
+  contribution,
+  earnings,
+  fee;
 
   String get label => switch (this) {
     created => 'Opened',
@@ -43,6 +48,9 @@ enum AccountEventType {
     sell => 'Sell',
     dividend => 'Dividend',
     priceUpdate => 'Price Update',
+    contribution => 'Contribution',
+    earnings => 'Earnings',
+    fee => 'Fee',
   };
 }
 
@@ -64,6 +72,11 @@ enum AccountEventType {
 ///   unchanged.
 /// - priceUpdate: [price] is the newly observed share price and
 ///   [previous] the price it replaces; units are unchanged.
+/// - contribution: [amount] is paid into the fund and added to the
+///   balance.
+/// - earnings: [amount] is the investment return credited, negative
+///   when the fund's investments fell.
+/// - fee: [amount] is the charge deducted from the balance.
 /// - rateChange: [rate] is the new rate; [previous] records the old rate.
 /// - balanceUpdate: [amount] is the new balance; [previous] the old balance.
 ///
@@ -215,7 +228,17 @@ class AccountEvent {
       'Price '
           '${previous != null ? '$symbol${_money.format(previous!)} → ' : ''}'
           '$symbol${_money.format(price ?? 0)}',
+    AccountEventType.contribution =>
+      'Contribution $symbol${_money.format(amount ?? 0)}',
+    // Earnings can be a loss, so the sign matters here.
+    AccountEventType.earnings => 'Earnings ${_signed(symbol, amount ?? 0)}',
+    AccountEventType.fee => 'Fee $symbol${_money.format(amount ?? 0)}',
   };
+
+  /// A money amount carrying its sign, e.g. `−\$500.00` for a loss.
+  static String _signed(String symbol, double value) => value < 0
+      ? '−$symbol${_money.format(-value)}'
+      : '$symbol${_money.format(value)}';
 
   /// `Buy 50 MSFT @ US\$420.00` — the price is included when recorded.
   String _trade(String verb, String symbol, String? ticker) =>

@@ -61,14 +61,24 @@ class _EventEditState extends State<EventEdit> {
           AccountEventType.priceUpdate,
           AccountEventType.balanceUpdate,
         ]
+      : _superFund
+      ? const [
+          AccountEventType.contribution,
+          AccountEventType.earnings,
+          AccountEventType.fee,
+          AccountEventType.balanceUpdate,
+        ]
       : const [
           AccountEventType.interest,
           AccountEventType.deposit,
+          AccountEventType.fee,
           AccountEventType.rateChange,
           AccountEventType.balanceUpdate,
         ];
 
   bool get _shares => widget.account.isShares;
+
+  bool get _superFund => widget.account.isSuper;
 
   bool get _isCreated => widget.event.type == AccountEventType.created;
 
@@ -97,6 +107,9 @@ class _EventEditState extends State<EventEdit> {
     AccountEventType.sell => 'Units sold',
     AccountEventType.dividend => 'Dividend received',
     AccountEventType.priceUpdate => 'New share price',
+    AccountEventType.contribution => 'Contribution',
+    AccountEventType.earnings => 'Earnings (negative for a loss)',
+    AccountEventType.fee => 'Fee charged',
     AccountEventType.balanceUpdate => _shares ? 'Units held' : 'New balance',
   };
 
@@ -267,9 +280,10 @@ class _EventEditState extends State<EventEdit> {
 **Entry type**
 
 Changing the type changes how the value is applied when the history
-is replayed: buys and deposits add, sells subtract, a rate change
-sets the rate, a price update sets the share price, a dividend leaves
-the holding unchanged, and a balance update sets the figure outright.
+is replayed: buys, deposits, contributions and earnings add, sells
+and fees subtract, a rate change sets the rate, a price update sets
+the share price, a dividend leaves the holding unchanged, and a
+balance update sets the figure outright.
 
 ''',
                   child: DropdownButtonFormField<AccountEventType>(
