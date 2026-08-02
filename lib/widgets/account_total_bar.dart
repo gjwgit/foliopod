@@ -30,8 +30,10 @@ class AccountTotalBar extends StatelessWidget {
 
 **Totals**
 
-Totals across the listed accounts. Interest FY is the interest earned
-since 1 July.
+Totals across the listed accounts. Interest FY is the income earned
+since 1 July, and Monthly is the estimated monthly income at the
+current rates — offset accounts are left out of it, since their figure
+is loan interest saved rather than income earned.
 
 ''';
     }
@@ -46,8 +48,10 @@ since 1 July.
 **Totals**
 
 Totals across the listed accounts, normalised to AUD at the ECB daily
-reference rates (frankfurter.app)$dated. ${excluded}Interest FY is
-the interest earned since 1 July.
+reference rates (frankfurter.app)$dated. ${excluded}Interest FY is the
+income earned since 1 July, and Monthly is the estimated monthly
+income at the current rates — offset accounts are left out of it,
+since their figure is loan interest saved rather than income earned.
 
 ''';
   }
@@ -62,6 +66,7 @@ the interest earned since 1 July.
     // from the sums and counted so the bar can say so. 20260729 gjw
     var balance = 0.0;
     var interestFY = 0.0;
+    var monthly = 0.0;
     var unconverted = 0;
     for (final a in accounts) {
       final b = PortfolioService.audValue(a);
@@ -71,6 +76,12 @@ the interest earned since 1 July.
       } else {
         balance += b;
         interestFY += i;
+      }
+      // An offset account's figure is loan interest saved rather than
+      // income earned, so it is left out of the monthly total — adding
+      // it would overstate what the portfolio brings in. 20260731 gjw
+      if (!a.isOffset) {
+        monthly += PortfolioService.audEstimatedMonthly(a) ?? 0;
       }
     }
     final count = accounts.length;
@@ -101,6 +112,14 @@ the interest earned since 1 July.
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (monthly > 0) ...[
+                  Text(
+                    'Monthly  ${foreign ? 'A' : ''}'
+                    '\$${fmt.format(monthly)}',
+                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(width: 16),
+                ],
                 Text(
                   'Interest FY  ${foreign ? 'A' : ''}'
                   '\$${fmt.format(interestFY)}',

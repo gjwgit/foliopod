@@ -95,6 +95,12 @@ supplied, so shareholdings and funds without a crediting rate simply
 omit it. It is an estimate — no compounding, no fees, and no account
 of bonus-rate conditions.
 
+The summary line under the list totals the estimated monthly income
+across the accounts shown, alongside the balance and the income for
+the year. Offset accounts are left out of that total: their figure is
+loan interest saved rather than income earned, so including it would
+overstate what the portfolio brings in.
+
 Accounts can be held in any currency (AUD, USD, SGD, ...). Balances
 and interest display in the account's own currency, and are
 normalised to AUD wherever accounts appear together — the tile shows

@@ -89,6 +89,15 @@ class PortfolioService {
     return account.currentBalance * account.currentRate / 100 / 12;
   }
 
+  /// The monthly estimate normalised to AUD. Null when the account has
+  /// no rate to work from, or when its currency cannot be converted.
+  /// 20260731 gjw
+  static double? audEstimatedMonthly(Account account) {
+    final monthly = estimatedMonthly(account);
+    if (monthly == null) return null;
+    return ExchangeService.toAud(monthly, account.currency);
+  }
+
   /// Income earned this financial year (interest and bonus for cash,
   /// dividends for shares) normalised to AUD.
   static double? audIncomeFY(Account account) =>
