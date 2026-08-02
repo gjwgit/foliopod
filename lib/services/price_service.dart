@@ -117,7 +117,9 @@ class PriceService {
   static Future<Quote?> _fetchQuote(String symbol) async {
     try {
       final uri = Uri.parse(
-        'https://query1.finance.yahoo.com/v8/finance/chart/'
+        // 20260803 gjw Split string to allow link checking.
+        'https://query1.finance.yahoo.com'
+        '/v8/finance/chart/'
         '${Uri.encodeComponent(symbol)}?range=1d&interval=1d',
       );
       // A browser-like User-Agent: the endpoint rejects default clients.

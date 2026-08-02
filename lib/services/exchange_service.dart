@@ -90,7 +90,9 @@ class ExchangeService {
   static Future<bool> refresh() async {
     try {
       final uri = Uri.parse(
-        'https://api.frankfurter.app/latest?from=$baseCurrency',
+        // 20260803 gjw Split the strings to support link checking.
+        'https://api.frankfurter.app/latest'
+        '?from=$baseCurrency',
       );
       final response = await http.get(uri).timeout(const Duration(seconds: 10));
       if (response.statusCode != 200) {
