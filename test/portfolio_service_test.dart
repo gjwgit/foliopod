@@ -7,6 +7,7 @@ library;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:foliopod/models/account.dart';
+import 'package:foliopod/models/account_event.dart';
 import 'package:foliopod/services/exchange_service.dart';
 import 'package:foliopod/services/portfolio_service.dart';
 import 'package:foliopod/services/price_service.dart';
@@ -45,6 +46,73 @@ void main() {
       expect(PortfolioService.nativeValue(a), 65);
       expect(PortfolioService.audValue(a), closeTo(100, 1e-9));
       expect(PortfolioService.priceFor(a), isNull);
+    });
+  });
+
+  group('estimatedMonthly', () {
+    test('is a twelfth of the annual rate on the balance', () {
+      final a = Account.open(
+        name: 'Saver',
+        openingBalance: 10000,
+        rate: 4.35,
+        date: DateTime(2026, 1, 1),
+      );
+      // 10,000 x 4.35% = 435 a year, so 36.25 a month.
+      expect(PortfolioService.estimatedMonthly(a), closeTo(36.25, 1e-9));
+    });
+
+    test('is null when no rate has been supplied', () {
+      final a = Account.open(
+        name: 'Everyday',
+        openingBalance: 10000,
+        date: DateTime(2026, 1, 1),
+      );
+      expect(a.currentRate, 0);
+      expect(PortfolioService.estimatedMonthly(a), isNull);
+    });
+
+    test('is null for a shareholding', () {
+      expect(PortfolioService.estimatedMonthly(shares()), isNull);
+    });
+
+    test('works for a super fund with a crediting rate', () {
+      final a = Account.open(
+        name: 'Test Super',
+        type: AccountType.superannuation,
+        openingBalance: 120000,
+        rate: 6.0,
+        date: DateTime(2026, 1, 1),
+      );
+      expect(PortfolioService.estimatedMonthly(a), closeTo(600, 1e-9));
+    });
+
+    test('stays in the account currency, unconverted', () {
+      final a = Account.open(
+        name: 'US Saver',
+        currency: 'USD',
+        openingBalance: 1200,
+        rate: 5.0,
+        date: DateTime(2026, 1, 1),
+      );
+      // 5 a month in USD, not converted to AUD.
+      expect(PortfolioService.estimatedMonthly(a), closeTo(5, 1e-9));
+    });
+
+    test('follows the balance and rate as entries are recorded', () {
+      final a =
+          Account.open(
+            name: 'Saver',
+            openingBalance: 10000,
+            rate: 6.0,
+            date: DateTime(2026, 1, 1),
+          ).applyEvent(
+            AccountEvent(
+              date: DateTime(2026, 2, 1),
+              type: AccountEventType.rateChange,
+              rate: 3.0,
+            ),
+          );
+      expect(PortfolioService.estimatedMonthly(a), closeTo(25, 1e-9));
     });
   });
 

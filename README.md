@@ -85,6 +85,16 @@ of the provider-specific code sits in `_fetchQuote` in
 `lib/services/price_service.dart`, so swapping providers means
 rewriting one method.
 
+On a window wide enough for the extra column, each account also shows
+a **Monthly** figure beneath the change since 1 July: what the current
+balance would earn in a month at the account's rate, as a twelfth of
+the annual rate. On an offset account the rate represents loan
+interest saved rather than income earned, so the figure is labelled
+**Benefit**. It appears only where a rate has been
+supplied, so shareholdings and funds without a crediting rate simply
+omit it. It is an estimate — no compounding, no fees, and no account
+of bonus-rate conditions.
+
 Accounts can be held in any currency (AUD, USD, SGD, ...). Balances
 and interest display in the account's own currency, and are
 normalised to AUD wherever accounts appear together — the tile shows

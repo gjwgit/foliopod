@@ -38,6 +38,7 @@ Williams](https://togaware.com/Graham.Williams.html).
 
 ## 1.0 New Secure Key Handling
 
++ Add monthly estimates to listing [1.0.8 20260802 gjw]
 + Support superannuation accounts [1.0.7 20260802 gjw]
 + Updated icons for different accounts [1.0.6 20260802 gjw]
 + Show improvement since last 1 July [1.0.5 20260802 gjw]

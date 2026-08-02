@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=FolioPod
+Comment=Private, secure financial folio manager
+Exec=foliopod
+Icon=${SNAP}/meta/gui/icon.png
+Terminal=false
+Type=Application
+Categories=Utility;

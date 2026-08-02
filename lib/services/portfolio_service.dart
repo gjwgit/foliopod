@@ -75,6 +75,20 @@ class PortfolioService {
     return then == null ? null : now - then;
   }
 
+  /// What the account would earn in a month at its current rate: a
+  /// twelfth of the annual rate applied to the balance, in the account's
+  /// own currency. Null when there is no rate to work from — a
+  /// shareholding, or a fund with no crediting rate recorded.
+  ///
+  /// Deliberately a plain nominal twelfth rather than a compounded
+  /// monthly rate: it is the figure a rate quoted "per annum" implies
+  /// for a month, and it makes the arithmetic checkable by hand.
+  /// 20260731 gjw
+  static double? estimatedMonthly(Account account) {
+    if (account.isShares || account.currentRate == 0) return null;
+    return account.currentBalance * account.currentRate / 100 / 12;
+  }
+
   /// Income earned this financial year (interest and bonus for cash,
   /// dividends for shares) normalised to AUD.
   static double? audIncomeFY(Account account) =>

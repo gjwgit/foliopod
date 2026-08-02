@@ -70,8 +70,8 @@ class AccountTile extends StatelessWidget {
     return account.rateStr;
   }
 
-  /// The change in value since 1 July, in the account's own currency.
-  /// Shown only on wide tiles.
+  /// The change in value since 1 July and, where a rate is recorded, the
+  /// monthly interest that rate implies. Shown only on wide tiles.
   Widget _changeColumn(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final change = PortfolioService.changeSinceFYStart(account);
@@ -85,18 +85,54 @@ class AccountTile extends StatelessWidget {
         ? '—'
         : '${change >= 0 ? '+' : '−'}'
               '${formatCurrencyAmount(change.abs(), account.currency)}';
+    final monthly = PortfolioService.estimatedMonthly(account);
 
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        _stat(
+          context,
+          label: 'Since 1 Jul',
+          value: label,
+          colour: colour,
+          tooltip: _changeHelp(unknown),
+        ),
+        // Only where a rate has been supplied to base it on. 20260731 gjw
+        if (monthly != null) ...[
+          const Gap(2),
+          _stat(
+            context,
+            label: _monthlyLabel,
+            value: formatCurrencyAmount(monthly, account.currency),
+            colour: cs.primary,
+            tooltip: _monthlyHelp,
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// A caption and its figure on one line, with their own tooltip.
+  Widget _stat(
+    BuildContext context, {
+    required String label,
+    required String value,
+    required Color colour,
+    required String tooltip,
+  }) {
+    final cs = Theme.of(context).colorScheme;
     return MarkdownTooltip(
-      message: _changeHelp(unknown),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      message: tooltip,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Since 1 Jul',
+            label,
             style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
           ),
+          const Gap(6),
           Text(
-            label,
+            value,
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -107,6 +143,23 @@ class AccountTile extends StatelessWidget {
       ),
     );
   }
+
+  /// An offset account's rate is loan interest it saves rather than
+  /// income it earns, so its figure is a benefit. 20260731 gjw
+  String get _monthlyLabel => account.isOffset ? 'Benefit' : 'Monthly';
+
+  String get _monthlyHelp =>
+      '''
+
+**$_monthlyLabel**
+
+What the current balance would ${account.isOffset ? 'save' : 'earn'} in
+a month at ${account.rateStr}, as a twelfth of the annual rate. An
+estimate only: it takes no account of compounding, of fees, of any
+conditions attached to a bonus rate, or of the balance changing during
+the month.
+
+''';
 
   String _changeHelp(bool unknown) {
     final basis = account.isShares

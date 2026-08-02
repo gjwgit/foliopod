@@ -381,6 +381,10 @@ class Account {
   /// Whether this account is a superannuation fund. 20260731 gjw
   bool get isSuper => type == AccountType.superannuation;
 
+  /// Whether this account offsets a loan. Its rate represents interest
+  /// saved rather than interest earned. 20260731 gjw
+  bool get isOffset => type == AccountType.offset;
+
   /// What the income earned on this kind of account is called, for use
   /// in prose. 20260731 gjw
   String get incomeLabel => switch (type) {
