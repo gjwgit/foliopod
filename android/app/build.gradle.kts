@@ -17,6 +17,16 @@ android {
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.togaware.foliopod"
+
+        // 20260731 gjw flutter_appauth (via solidpod, for Solid OIDC
+        // login) contributes AppAuth's RedirectUriReceiverActivity to the
+        // merged manifest with android:scheme="${appAuthRedirectScheme}".
+        // The merger fails unless the app supplies that placeholder, so
+        // set it to the scheme of the redirect URI registered in
+        // main.dart (com.togaware.foliopod://redirect) and in the
+        // client-profile.jsonld. Schemes must be lower case.
+        manifestPlaceholders["appAuthRedirectScheme"] =
+            "com.togaware.foliopod"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
