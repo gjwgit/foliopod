@@ -50,8 +50,8 @@ class AccountHistory extends StatelessWidget {
           for (final event in events) {
             provider.recordEvent(account.id, event);
           }
-          if (!context.mounted) return;
-          await savePodOrError(context, provider);
+          // Throws on failure so RecordEvent can report it and stay open.
+          await savePodOrThrow(provider);
         },
       ),
     );
@@ -66,8 +66,8 @@ class AccountHistory extends StatelessWidget {
         account: account,
         onSave: (updated) async {
           provider.updateAccount(updated);
-          if (!context.mounted) return;
-          await savePodOrError(context, provider);
+          // Throws on failure so AccountEdit can report it and stay open.
+          await savePodOrThrow(provider);
         },
       ),
     );
@@ -87,8 +87,8 @@ class AccountHistory extends StatelessWidget {
         account: account,
         onSave: (updated) async {
           provider.updateEvent(account.id, updated);
-          if (!context.mounted) return;
-          await savePodOrError(context, provider);
+          // Throws on failure so EventEdit can report it and stay open.
+          await savePodOrThrow(provider);
         },
         onDelete: () async {
           provider.deleteEvent(account.id, event.id);

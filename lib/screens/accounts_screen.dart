@@ -69,7 +69,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
       builder: (_) => AccountEdit(
         onSave: (account) async {
           provider.addAccount(account);
-          await _saveOrError(provider);
+          // Throws on failure so AccountEdit can report it and stay open.
+          await savePodOrThrow(provider);
         },
       ),
     );
@@ -93,7 +94,8 @@ class _AccountsScreenState extends State<AccountsScreen> {
           for (final event in events) {
             provider.recordEvent(account.id, event);
           }
-          await _saveOrError(provider);
+          // Throws on failure so RecordEvent can report it and stay open.
+          await savePodOrThrow(provider);
         },
       ),
     );

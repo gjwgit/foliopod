@@ -51,8 +51,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
         account: account,
         onSave: (updated) async {
           provider.updateEvent(account.id, updated);
-          if (!mounted) return;
-          await savePodOrError(context, provider);
+          // Throws on failure so EventEdit can report it and stay open.
+          await savePodOrThrow(provider);
         },
         onDelete: () async {
           provider.deleteEvent(account.id, event.id);

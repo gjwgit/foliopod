@@ -39,7 +39,9 @@ class EventEdit extends StatefulWidget {
   /// Returns a future that completes when the Pod write is done. It MUST
   /// be awaited by the caller's implementation: closing the app window
   /// waits on this before quitting, so a fire-and-forget write would be
-  /// killed mid-flight and the edit silently lost.
+  /// killed mid-flight and the edit silently lost. It MUST throw when the
+  /// write fails, so the dialog stays open with the work intact rather
+  /// than closing over the top of it.
   final Future<void> Function(AccountEvent)? onSave;
 
   /// Called when the user confirms Delete, to remove [event].
@@ -216,7 +218,7 @@ class _EventEditState extends State<EventEdit> with UnsavedChangesMixin {
   /// Hand the edited entry to [EventEdit.onSave] and wait for the Pod
   /// write. Does NOT close the dialog: the window-close guard saves
   /// without popping, since the window is going, not just this route.
-  /// Returns whether the save went ahead.
+  /// Returns whether the entry actually reached the Pod.
   Future<bool> _save() async {
     if (!_formKey.currentState!.validate()) return false;
     final v = parseNum(_value.text)!;
@@ -245,8 +247,15 @@ class _EventEditState extends State<EventEdit> with UnsavedChangesMixin {
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       );
     }
-    // Awaited so a window close can wait for the Pod write to complete.
-    await widget.onSave?.call(result);
+    // Awaited so a window close can wait for the Pod write to complete,
+    // and a failed write is reported here rather than silently closing
+    // over the top of the edit.
+    try {
+      await widget.onSave?.call(result);
+    } catch (e) {
+      SolidWriteFailures.report('Could not save the entry to your Pod.\n\n$e');
+      return false;
+    }
     return true;
   }
 
@@ -285,7 +294,7 @@ class _EventEditState extends State<EventEdit> with UnsavedChangesMixin {
   bool get canSaveUnsavedChanges => _valid;
 
   @override
-  Future<void> saveUnsavedChanges() => _save();
+  Future<bool> saveUnsavedChanges() => _save();
 
   Future<void> _delete() async {
     final confirmed = await showDialog<bool>(

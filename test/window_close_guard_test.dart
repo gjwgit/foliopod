@@ -164,6 +164,47 @@ void main() {
     await closeAll(tester);
   });
 
+  // Regression: saveUnsavedChanges() reported "saved" whatever happened, so
+  // a failed Pod write still let the window close and the entry was lost —
+  // the very thing the prompt exists to prevent. resolveAll() must say no.
+  testWidgets('window-close Save resolves false when the Pod write fails', (
+    tester,
+  ) async {
+    SolidWriteFailures.clear();
+    addTearDown(SolidWriteFailures.clear);
+
+    await openDialog(
+      tester,
+      RecordEvent(
+        account: account(),
+        onSave: (events) async => throw Exception('Pod unreachable'),
+      ),
+    );
+    await tester.enterText(value, '25');
+    await tester.pump();
+
+    final future = SolidWindowCloseGuard.resolveAll();
+    await tester.pumpAndSettle();
+    await tapPrompt(tester, 'Save');
+
+    expect(await future, isFalse);
+    expect(SolidWriteFailures.latest.value, contains('Pod unreachable'));
+    expect(
+      SolidWriteFailures.latest.value,
+      contains('Could not record the entry in your Pod.'),
+    );
+
+    // The editor is still open with the entry intact, and still reports it
+    // as unsaved.
+    expect(find.text('25'), findsOneWidget);
+    final again = SolidWindowCloseGuard.resolveAll();
+    await tester.pumpAndSettle();
+    expect(find.text('Unsaved changes'), findsOneWidget);
+    await tapPrompt(tester, 'Keep editing');
+    expect(await again, isFalse);
+    await closeAll(tester);
+  });
+
   testWidgets('editor unregisters its resolver on dispose', (tester) async {
     await openDialog(tester, RecordEvent(account: account()));
     await tester.enterText(value, '25');
@@ -244,6 +285,34 @@ void main() {
     await closeAll(tester);
   });
 
+  testWidgets(
+    'AccountEdit window-close Save resolves false on a failed write',
+    (tester) async {
+      SolidWriteFailures.clear();
+      addTearDown(SolidWriteFailures.clear);
+
+      await openDialog(
+        tester,
+        AccountEdit(onSave: (a) async => throw Exception('Pod unreachable')),
+      );
+      await tester.enterText(find.byType(TextFormField).first, 'Everyday');
+      await tester.pump();
+
+      final future = SolidWindowCloseGuard.resolveAll();
+      await tester.pumpAndSettle();
+      await tapPrompt(tester, 'Save');
+
+      expect(await future, isFalse);
+      expect(
+        SolidWriteFailures.latest.value,
+        contains('Could not save the account to your Pod.'),
+      );
+      // The dialog is still open with the name intact.
+      expect(find.text('Everyday'), findsOneWidget);
+      await closeAll(tester);
+    },
+  );
+
   // ── EventEdit ──────────────────────────────────────────────────────────────
 
   testWidgets('EventEdit prompts and keeps the edit on Keep editing', (
@@ -294,6 +363,38 @@ void main() {
 
     expect(await future, isTrue);
     expect(saved?.amount, 1500);
+    await closeAll(tester);
+  });
+
+  testWidgets('EventEdit window-close Save resolves false on a failed write', (
+    tester,
+  ) async {
+    SolidWriteFailures.clear();
+    addTearDown(SolidWriteFailures.clear);
+
+    final a = account();
+    await openDialog(
+      tester,
+      EventEdit(
+        event: a.events.first,
+        account: a,
+        onSave: (e) async => throw Exception('Pod unreachable'),
+      ),
+    );
+    await tester.enterText(find.byType(TextFormField).first, '1500');
+    await tester.pump();
+
+    final future = SolidWindowCloseGuard.resolveAll();
+    await tester.pumpAndSettle();
+    await tapPrompt(tester, 'Save');
+
+    expect(await future, isFalse);
+    expect(
+      SolidWriteFailures.latest.value,
+      contains('Could not save the entry to your Pod.'),
+    );
+    // The dialog is still open with the edited amount intact.
+    expect(find.text('1500'), findsOneWidget);
     await closeAll(tester);
   });
 }

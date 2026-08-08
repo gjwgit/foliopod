@@ -45,7 +45,9 @@ class RecordEvent extends StatefulWidget {
   /// Returns a future that completes when the Pod write is done. It MUST
   /// be awaited by the caller's implementation: closing the app window
   /// waits on this before quitting, so a fire-and-forget write would be
-  /// killed mid-flight and the entry silently lost.
+  /// killed mid-flight and the entry silently lost. It MUST throw when the
+  /// write fails, so the dialog stays open with the work intact rather
+  /// than closing over the top of it.
   final Future<void> Function(List<AccountEvent>)? onSave;
 
   const RecordEvent({super.key, required this.account, this.onSave});
@@ -287,7 +289,7 @@ class _RecordEventState extends State<RecordEvent> with UnsavedChangesMixin {
   /// Hand the entries to record to [RecordEvent.onSave] and wait for the
   /// Pod write. Does NOT close the dialog: the window-close guard saves
   /// without popping, since the window is going, not just this route.
-  /// Returns whether the save went ahead.
+  /// Returns whether the entries actually reached the Pod.
   Future<bool> _save() async {
     if (!_formKey.currentState!.validate()) return false;
     final v = parseNum(_value.text)!;
@@ -325,8 +327,17 @@ class _RecordEventState extends State<RecordEvent> with UnsavedChangesMixin {
         );
       }
     }
-    // Awaited so a window close can wait for the Pod write to complete.
-    await widget.onSave?.call(events);
+    // Awaited so a window close can wait for the Pod write to complete,
+    // and a failed write is reported here rather than silently closing
+    // over the top of the entry.
+    try {
+      await widget.onSave?.call(events);
+    } catch (e) {
+      SolidWriteFailures.report(
+        'Could not record the entry in your Pod.\n\n$e',
+      );
+      return false;
+    }
     return true;
   }
 
@@ -365,7 +376,7 @@ class _RecordEventState extends State<RecordEvent> with UnsavedChangesMixin {
   bool get canSaveUnsavedChanges => _valid;
 
   @override
-  Future<void> saveUnsavedChanges() => _save();
+  Future<bool> saveUnsavedChanges() => _save();
 
   @override
   Widget build(BuildContext context) {

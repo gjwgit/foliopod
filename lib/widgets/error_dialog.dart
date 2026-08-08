@@ -47,3 +47,15 @@ Future<void> savePodOrError(BuildContext context, AppProvider provider) async {
     message: 'Could not save to your Pod.\n\n$err',
   );
 }
+
+/// Saves the provider's accounts to the Pod, throwing when the write
+/// fails.
+///
+/// Used for an editor's onSave, where the editor is waiting on the
+/// outcome: it reports the failure in its own words and stays open with
+/// the work intact. Reporting here instead would swallow the failure, and
+/// a window close would then proceed over the top of the lost edit.
+Future<void> savePodOrThrow(AppProvider provider) async {
+  final err = await provider.saveToPod();
+  if (err != null) throw Exception(err);
+}
