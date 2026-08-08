@@ -83,7 +83,13 @@ class _AccountEditState extends State<AccountEdit> with UnsavedChangesMixin {
   /// the enabled state of the Save button, and whether closing asks about
   /// unsaved changes. Balance, rate and the opening date are only
   /// editable on a new account, so they count only there. 20260808 gjw
-  bool get _hasChanges =>
+  /// Whether the user has actually altered anything since the dialog opened.
+  ///
+  /// This is what "unsaved" means for the close prompt: a new account nobody
+  /// has typed into yet has nothing to lose, so it must not prompt. The
+  /// balance, rate and opened date only count while the account is new, since
+  /// afterwards they are not editable here.
+  bool get _isEdited =>
       (_isNew &&
           (_balance.text != _initBalance ||
               _rate.text != _initRate ||
@@ -97,6 +103,13 @@ class _AccountEditState extends State<AccountEdit> with UnsavedChangesMixin {
       _type != _initType ||
       _currency != _initCurrency ||
       _isClosed != _initIsClosed;
+
+  /// Whether Save should be offered.
+  ///
+  /// A new account can always be submitted — the form's own validation is what
+  /// rejects it when incomplete — so Save stays enabled from the outset, as it
+  /// did before the close prompt existed.
+  bool get _hasChanges => _isNew || _isEdited;
 
   @override
   void initState() {
@@ -226,7 +239,7 @@ class _AccountEditState extends State<AccountEdit> with UnsavedChangesMixin {
 
   /// The Cancel button: close, but first ask about any unsaved changes.
   Future<void> _cancel() async {
-    if (!_hasChanges) {
+    if (!_isEdited) {
       Navigator.of(context).pop();
       return;
     }
@@ -248,7 +261,7 @@ class _AccountEditState extends State<AccountEdit> with UnsavedChangesMixin {
   // what counts as unsaved and how to save it.
 
   @override
-  bool get hasUnsavedChanges => _hasChanges;
+  bool get hasUnsavedChanges => _isEdited;
 
   @override
   Future<void> saveUnsavedChanges() => _save();

@@ -195,6 +195,41 @@ void main() {
     await closeAll(tester);
   });
 
+  // The Save button and the close prompt answer different questions. A new
+  // account can always be submitted (validation rejects it if incomplete), but
+  // an untouched new dialog has nothing to lose and must not prompt. These
+  // were briefly collapsed into one getter, which disabled Save on a fresh
+  // Add Account dialog.
+  testWidgets('AccountEdit offers Save on an untouched new account', (
+    tester,
+  ) async {
+    await openDialog(tester, const AccountEdit());
+    ignorePreExistingOverflow(tester);
+
+    final save = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Save'),
+    );
+    expect(save.onPressed, isNotNull);
+    await closeAll(tester);
+  });
+
+  testWidgets('AccountEdit prompts once the new account is edited', (
+    tester,
+  ) async {
+    await openDialog(tester, const AccountEdit());
+    ignorePreExistingOverflow(tester);
+    await tester.enterText(find.byType(TextFormField).first, 'Everyday');
+    await tester.pump();
+
+    final future = SolidWindowCloseGuard.resolveAll();
+    await tester.pumpAndSettle();
+    expect(find.text('Unsaved changes'), findsOneWidget);
+
+    await tapPrompt(tester, 'Discard');
+    expect(await future, isTrue);
+    await closeAll(tester);
+  });
+
   testWidgets('AccountEdit window-close Save reports the account', (
     tester,
   ) async {

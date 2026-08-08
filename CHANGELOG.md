@@ -38,6 +38,7 @@ Williams](https://togaware.com/Graham.Williams.html).
 
 ## 1.0 New Secure Key Handling
 
++ Restore Save on a new account without prompting when untouched [1.0.13 20260808 gjw]
 + Report failed saves instead of failing silently [1.0.12 20260808 gjw]
 + Wait for in-flight Pod writes before closing [1.0.11 20260808 gjw]
 + Prompt to save unsaved edits on window close [1.0.10 20260808 gjw]
