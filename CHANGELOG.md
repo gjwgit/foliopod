@@ -38,6 +38,7 @@ Williams](https://togaware.com/Graham.Williams.html).
 
 ## 1.0 New Secure Key Handling
 
++ Wait for in-flight Pod writes before closing [1.0.11 20260808 gjw]
 + Prompt to save unsaved edits on window close [1.0.10 20260808 gjw]
 + Add total monthly [1.0.9 20260802 gjw]
 + Add monthly estimates to listing [1.0.8 20260802 gjw]
