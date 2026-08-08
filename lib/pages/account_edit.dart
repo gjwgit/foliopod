@@ -304,6 +304,10 @@ class _AccountEditState extends State<AccountEdit> with UnsavedChangesMixin {
                     Expanded(
                       child: DropdownButtonFormField<AccountType>(
                         initialValue: _type,
+                        // Without this the button sizes itself to the widest
+                        // item ("Superannuation"), which is wider than the
+                        // half-width it gets here and overflows the row.
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Type',
                           border: OutlineInputBorder(),

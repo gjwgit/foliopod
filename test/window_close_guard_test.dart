@@ -76,15 +76,6 @@ void main() {
 
   final value = find.byKey(const ValueKey('value'));
 
-  /// AccountEdit's Type/Currency dropdowns are wider than the half-width
-  /// they are given in the 460-wide dialog, so rendering it reports a
-  /// 58px overflow. That is pre-existing and nothing to do with the
-  /// close guard, so it is discarded here. 20260808 gjw
-  void ignorePreExistingOverflow(WidgetTester tester) {
-    final e = tester.takeException();
-    expect(e.toString(), contains('overflowed'));
-  }
-
   // ── RecordEvent ────────────────────────────────────────────────────────────
 
   testWidgets('resolveAll succeeds with no prompt when nothing changed', (
@@ -185,11 +176,19 @@ void main() {
 
   // ── AccountEdit ────────────────────────────────────────────────────────────
 
+  // Regression: the Type dropdown sized itself to its widest item
+  // ("Superannuation"), which is wider than the half-width it gets in the
+  // 460-wide dialog, so opening Add Account painted a 58px overflow stripe.
+  testWidgets('AccountEdit lays out without overflowing', (tester) async {
+    await openDialog(tester, const AccountEdit());
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('AccountEdit does not prompt for an untouched new account', (
     tester,
   ) async {
     await openDialog(tester, const AccountEdit());
-    ignorePreExistingOverflow(tester);
     expect(await SolidWindowCloseGuard.resolveAll(), isTrue);
     expect(find.text('Unsaved changes'), findsNothing);
     await closeAll(tester);
@@ -204,7 +203,6 @@ void main() {
     tester,
   ) async {
     await openDialog(tester, const AccountEdit());
-    ignorePreExistingOverflow(tester);
 
     final save = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Save'),
@@ -217,7 +215,6 @@ void main() {
     tester,
   ) async {
     await openDialog(tester, const AccountEdit());
-    ignorePreExistingOverflow(tester);
     await tester.enterText(find.byType(TextFormField).first, 'Everyday');
     await tester.pump();
 
@@ -235,7 +232,6 @@ void main() {
   ) async {
     Account? saved;
     await openDialog(tester, AccountEdit(onSave: (a) async => saved = a));
-    ignorePreExistingOverflow(tester);
     await tester.enterText(find.byType(TextFormField).first, 'Everyday');
     await tester.pump();
 
