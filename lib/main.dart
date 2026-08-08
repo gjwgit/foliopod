@@ -148,7 +148,7 @@ class _FolioPodAppState extends State<FolioPodApp> {
                 'com.togaware.foliopod://redirect',
                 'http://localhost:4400/redirect.html',
               ],
-        child: const AppScaffold(),
+        child: const SolidWriteFailureListener(child: AppScaffold()),
       ),
     );
   }

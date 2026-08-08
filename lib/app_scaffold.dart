@@ -92,7 +92,17 @@ class _AppScaffoldState extends State<AppScaffold> {
   /// 20260730 gjw
   Future<void> _recordPrices(AppProvider provider) async {
     final recorded = provider.recordPriceUpdates();
-    if (recorded > 0) await provider.saveToPod();
+
+    // The price save is fired from a background refresh, so nothing reads the
+    // error it returns and a failed write looks to the user like a success.
+    // Watch it while still awaiting it, so the refresh action keeps waiting
+    // for the write as before. 20260808 gjw
+
+    if (recorded > 0) {
+      final save = provider.saveToPod();
+      SolidWriteFailures.watch(save, during: 'saving updated prices');
+      await save;
+    }
     if (mounted) setState(() {});
   }
 

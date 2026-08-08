@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 
 import 'package:foliopod/models/account.dart';
 import 'package:foliopod/services/app_provider.dart';
+import 'package:foliopod/widgets/error_dialog.dart';
 import 'package:foliopod/widgets/message_banner.dart';
 
 /// Export a complete JSON backup of all accounts (with their full
@@ -134,7 +135,21 @@ class _ImportScreenState extends State<ImportScreen> {
       }
 
       final added = provider.importAccounts(imported);
-      await provider.saveToPod();
+
+      // Report a failed write rather than discarding the error string and
+      // telling the user the import succeeded. 20260808 gjw
+
+      final saveError = await provider.saveToPod();
+      if (!mounted) return;
+      if (saveError != null) {
+        await showErrorDialog(
+          context,
+          title: 'Save failed',
+          message: 'Could not save to your Pod.\n\n$saveError',
+        );
+        _setMessage('Imported accounts were not saved.', error: true);
+        return;
+      }
       _setMessage(
         'Imported $added new account${added == 1 ? '' : 's'} '
         '(${imported.length - added} skipped as duplicates).',
