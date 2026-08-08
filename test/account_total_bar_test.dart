@@ -16,6 +16,10 @@ void main() {
   tearDown(() => ExchangeService.setRatesForTesting(null));
 
   Future<void> pumpBar(WidgetTester tester, List<Account> accounts) async {
+    // The bar is laid out at 900 below, wider than the default 800 test
+    // surface, which would clip it into an overflow. 20260808 gjw
+    await tester.binding.setSurfaceSize(const Size(1000, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(

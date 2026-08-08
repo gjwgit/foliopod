@@ -10,12 +10,14 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:emacs_text_field/emacs_text_field.dart';
 import 'package:gap/gap.dart';
 import 'package:markdown_tooltip/markdown_tooltip.dart';
+import 'package:solidui/solidui.dart';
 
 import 'package:foliopod/models/account.dart';
 import 'package:foliopod/models/account_event.dart';
+import 'package:foliopod/pages/edit_fields/event_amount_field.dart';
+import 'package:foliopod/pages/edit_fields/event_note_field.dart';
 import 'package:foliopod/pages/event_date_row.dart';
 import 'package:foliopod/services/money_format.dart';
 
@@ -31,18 +33,28 @@ import 'package:foliopod/services/money_format.dart';
 /// balance-update entry is recorded alongside, so the history remains an
 /// honest record of what was credited versus what was stated. 20260727 gjw
 ///
-/// Pops the `List<AccountEvent>` to record (one or two entries) on Save,
-/// or null on Cancel. The caller applies them in order via
-/// AppProvider.recordEvent.
+/// Reports the entries to record (one or two) through [onSave] and closes;
+/// Cancel closes without recording.
 class RecordEvent extends StatefulWidget {
   final Account account;
-  const RecordEvent({super.key, required this.account});
+
+  /// Called with the entries to record, in order, when the user taps
+  /// Save. The caller applies them via AppProvider.recordEvent and writes
+  /// to the Pod.
+  ///
+  /// Returns a future that completes when the Pod write is done. It MUST
+  /// be awaited by the caller's implementation: closing the app window
+  /// waits on this before quitting, so a fire-and-forget write would be
+  /// killed mid-flight and the entry silently lost.
+  final Future<void> Function(List<AccountEvent>)? onSave;
+
+  const RecordEvent({super.key, required this.account, this.onSave});
 
   @override
   State<RecordEvent> createState() => _RecordEventState();
 }
 
-class _RecordEventState extends State<RecordEvent> {
+class _RecordEventState extends State<RecordEvent> with UnsavedChangesMixin {
   final _formKey = GlobalKey<FormState>();
   final _value = TextEditingController();
   final _bonus = TextEditingController();
@@ -198,10 +210,30 @@ class _RecordEventState extends State<RecordEvent> {
     };
   }
 
+  // Snapshot of the initial entry type and date, so a change to either
+  // counts as something worth keeping. 20260808 gjw
+  late final AccountEventType _initType;
+  late final DateTime _initDate;
+
+  /// Whether the user has entered anything yet. This is a blank creation
+  /// form, so anything typed is unsaved work. The balance field is
+  /// auto-filled from the amount, so it only counts once edited by hand.
+  /// 20260808 gjw
+  bool get _hasChanges =>
+      _value.text.isNotEmpty ||
+      _bonus.text.isNotEmpty ||
+      _price.text.isNotEmpty ||
+      _note.text.isNotEmpty ||
+      _balanceTouched ||
+      _type != _initType ||
+      _date != _initDate;
+
   @override
   void initState() {
     super.initState();
     _type = _types.first;
+    _initType = _type;
+    _initDate = _date;
     _balance = TextEditingController(
       text: _shares
           ? formatUnits(widget.account.currentBalance)
@@ -252,8 +284,12 @@ class _RecordEventState extends State<RecordEvent> {
           _price.text.trim().isEmpty ||
           parseNum(_price.text) != null);
 
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
+  /// Hand the entries to record to [RecordEvent.onSave] and wait for the
+  /// Pod write. Does NOT close the dialog: the window-close guard saves
+  /// without popping, since the window is going, not just this route.
+  /// Returns whether the save went ahead.
+  Future<bool> _save() async {
+    if (!_formKey.currentState!.validate()) return false;
     final v = parseNum(_value.text)!;
     final bonus = _isInterest && _bonus.text.trim().isNotEmpty
         ? parseNum(_bonus.text)
@@ -289,8 +325,47 @@ class _RecordEventState extends State<RecordEvent> {
         );
       }
     }
-    Navigator.of(context).pop(events);
+    // Awaited so a window close can wait for the Pod write to complete.
+    await widget.onSave?.call(events);
+    return true;
   }
+
+  /// The Save button: record the entries, then close the dialog.
+  Future<void> _saveAndClose() async {
+    if (await _save() && mounted) Navigator.of(context).pop();
+  }
+
+  /// The Cancel button: close, but first ask about any unsaved entry.
+  Future<void> _cancel() async {
+    if (!_hasChanges) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context);
+    if (!mounted) return;
+    switch (action) {
+      case UnsavedChangesAction.save:
+        if (_valid) await _saveAndClose();
+      case UnsavedChangesAction.discard:
+        Navigator.of(context).pop();
+      case UnsavedChangesAction.keepEditing:
+        break;
+    }
+  }
+
+  // Closing the whole app window prompts to save/discard just like Cancel
+  // does, without popping the Navigator — the window is closing, not just
+  // this route. UnsavedChangesMixin runs that prompt; it only needs to know
+  // what counts as unsaved and how to save it.
+
+  @override
+  bool get hasUnsavedChanges => _hasChanges;
+
+  @override
+  bool get canSaveUnsavedChanges => _valid;
+
+  @override
+  Future<void> saveUnsavedChanges() => _save();
 
   @override
   Widget build(BuildContext context) {
@@ -338,21 +413,12 @@ class _RecordEventState extends State<RecordEvent> {
               Row(
                 children: [
                   Expanded(
-                    child: TextFormField(
-                      key: const ValueKey('value'),
+                    child: EventAmountField(
+                      fieldKey: const ValueKey('value'),
                       controller: _value,
                       autofocus: true,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: _valueLabel,
-                        prefixText: _isRate || _isUnits ? null : _moneyPrefix,
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      validator: (v) =>
-                          parseNum(v ?? '') == null ? 'Number' : null,
+                      label: _valueLabel,
+                      prefix: _isRate || _isUnits ? null : _moneyPrefix,
                     ),
                   ),
                   const Gap(12),
@@ -367,8 +433,13 @@ class _RecordEventState extends State<RecordEvent> {
               ),
               if (_isTrade) ...[
                 const Gap(12),
-                MarkdownTooltip(
-                  message: '''
+                EventAmountField(
+                  fieldKey: const ValueKey('price'),
+                  controller: _price,
+                  label: 'Price each',
+                  prefix: _moneyPrefix,
+                  optional: true,
+                  help: '''
 
 **Price paid**
 
@@ -377,29 +448,17 @@ The per-unit price for this trade, recorded for the history. Optional
 one. Leave empty if you would rather not record it.
 
 ''',
-                  child: TextFormField(
-                    key: const ValueKey('price'),
-                    controller: _price,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Price each',
-                      prefixText: _moneyPrefix,
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty || parseNum(v) != null)
-                        ? null
-                        : 'Number',
-                  ),
                 ),
               ],
               if (_isInterest) ...[
                 const Gap(12),
-                MarkdownTooltip(
-                  message: '''
+                EventAmountField(
+                  fieldKey: const ValueKey('bonus'),
+                  controller: _bonus,
+                  label: 'Bonus interest',
+                  prefix: _moneyPrefix,
+                  optional: true,
+                  help: '''
 
 **Bonus interest**
 
@@ -409,29 +468,16 @@ and bonus are added together in the balance and interest totals.
 Leave empty when there is no bonus.
 
 ''',
-                  child: TextFormField(
-                    key: const ValueKey('bonus'),
-                    controller: _bonus,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Bonus interest',
-                      prefixText: _moneyPrefix,
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty || parseNum(v) != null)
-                        ? null
-                        : 'Number',
-                  ),
                 ),
               ],
               if (!_isBalanceUpdate) ...[
                 const Gap(12),
-                MarkdownTooltip(
-                  message:
+                EventAmountField(
+                  fieldKey: const ValueKey('balance'),
+                  controller: _balance,
+                  label: _shares ? 'Units after' : 'Balance after',
+                  prefix: _shares ? null : _moneyPrefix,
+                  help:
                       '''
 
 ${_shares ? '**Units after**' : '**Balance after**'}
@@ -442,44 +488,18 @@ transactions have moved it — the difference is recorded as a separate
 balance update alongside this entry, keeping the history complete.
 
 ''',
-                  child: TextFormField(
-                    key: const ValueKey('balance'),
-                    controller: _balance,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: _shares ? 'Units after' : 'Balance after',
-                      prefixText: _shares ? null : _moneyPrefix,
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: (v) =>
-                        parseNum(v ?? '') == null ? 'Number' : null,
-                  ),
                 ),
               ],
               const Gap(12),
-              EmacsTextField(
-                controller: _note,
-                minLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Note',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
+              EventNoteField(controller: _note),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: _cancel, child: const Text('Cancel')),
         FilledButton(
-          onPressed: _valid ? _save : null,
+          onPressed: _valid ? _saveAndClose : null,
           child: const Text('Save'),
         ),
       ],

@@ -10,21 +10,19 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:emacs_text_field/emacs_text_field.dart';
 import 'package:gap/gap.dart';
 import 'package:markdown_tooltip/markdown_tooltip.dart';
+import 'package:solidui/solidui.dart';
 
 import 'package:foliopod/models/account.dart';
 import 'package:foliopod/models/account_event.dart';
+import 'package:foliopod/pages/edit_fields/event_amount_field.dart';
+import 'package:foliopod/pages/edit_fields/event_note_field.dart';
 import 'package:foliopod/pages/event_date_row.dart';
 import 'package:foliopod/services/money_format.dart';
 
-/// The outcome of an [EventEdit] dialog: the edited event on Save, or
-/// deleted true on Delete. The dialog pops null on Cancel.
-typedef EventEditResult = ({AccountEvent? event, bool deleted});
-
 /// Dialog to edit a history entry's type, value, date and note, or to
-/// delete the entry. The caller applies the result via
+/// delete the entry. The caller applies the outcome via
 /// AppProvider.updateEvent / deleteEvent, which replay the account's
 /// history so the balance, rate and each entry's derived fields are
 /// recomputed.
@@ -35,13 +33,31 @@ class EventEdit extends StatefulWidget {
   /// and label quantities as units or money. 20260729 gjw
   final Account account;
 
-  const EventEdit({super.key, required this.event, required this.account});
+  /// Called with the edited entry when the user taps Save. The caller
+  /// updates the provider and writes to the Pod.
+  ///
+  /// Returns a future that completes when the Pod write is done. It MUST
+  /// be awaited by the caller's implementation: closing the app window
+  /// waits on this before quitting, so a fire-and-forget write would be
+  /// killed mid-flight and the edit silently lost.
+  final Future<void> Function(AccountEvent)? onSave;
+
+  /// Called when the user confirms Delete, to remove [event].
+  final Future<void> Function()? onDelete;
+
+  const EventEdit({
+    super.key,
+    required this.event,
+    required this.account,
+    this.onSave,
+    this.onDelete,
+  });
 
   @override
   State<EventEdit> createState() => _EventEditState();
 }
 
-class _EventEditState extends State<EventEdit> {
+class _EventEditState extends State<EventEdit> with UnsavedChangesMixin {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _value;
   late final TextEditingController _bonus;
@@ -197,8 +213,12 @@ class _EventEditState extends State<EventEdit> {
     super.dispose();
   }
 
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
+  /// Hand the edited entry to [EventEdit.onSave] and wait for the Pod
+  /// write. Does NOT close the dialog: the window-close guard saves
+  /// without popping, since the window is going, not just this route.
+  /// Returns whether the save went ahead.
+  Future<bool> _save() async {
+    if (!_formKey.currentState!.validate()) return false;
     final v = parseNum(_value.text)!;
     final AccountEvent result;
     if (_isCreated) {
@@ -225,8 +245,47 @@ class _EventEditState extends State<EventEdit> {
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       );
     }
-    Navigator.of(context).pop<EventEditResult>((event: result, deleted: false));
+    // Awaited so a window close can wait for the Pod write to complete.
+    await widget.onSave?.call(result);
+    return true;
   }
+
+  /// The Save button: save, then close the dialog.
+  Future<void> _saveAndClose() async {
+    if (await _save() && mounted) Navigator.of(context).pop();
+  }
+
+  /// The Cancel button: close, but first ask about any unsaved changes.
+  Future<void> _cancel() async {
+    if (!_hasChanges) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context);
+    if (!mounted) return;
+    switch (action) {
+      case UnsavedChangesAction.save:
+        if (_valid) await _saveAndClose();
+      case UnsavedChangesAction.discard:
+        Navigator.of(context).pop();
+      case UnsavedChangesAction.keepEditing:
+        break;
+    }
+  }
+
+  // Closing the whole app window prompts to save/discard just like Cancel
+  // does, without popping the Navigator — the window is closing, not just
+  // this route. UnsavedChangesMixin runs that prompt; it only needs to know
+  // what counts as unsaved and how to save it.
+
+  @override
+  bool get hasUnsavedChanges => _hasChanges;
+
+  @override
+  bool get canSaveUnsavedChanges => _valid;
+
+  @override
+  Future<void> saveUnsavedChanges() => _save();
 
   Future<void> _delete() async {
     final confirmed = await showDialog<bool>(
@@ -250,7 +309,8 @@ class _EventEditState extends State<EventEdit> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    Navigator.of(context).pop<EventEditResult>((event: null, deleted: true));
+    await widget.onDelete?.call();
+    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -304,38 +364,20 @@ balance update sets the figure outright.
               Row(
                 children: [
                   Expanded(
-                    child: TextFormField(
+                    child: EventAmountField(
                       controller: _value,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: _valueLabel,
-                        prefixText: (_isRate && !_isCreated) || _isUnits
-                            ? null
-                            : _moneyPrefix,
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      validator: (v) =>
-                          parseNum(v ?? '') == null ? 'Number' : null,
+                      label: _valueLabel,
+                      prefix: (_isRate && !_isCreated) || _isUnits
+                          ? null
+                          : _moneyPrefix,
                     ),
                   ),
                   const Gap(12),
                   Expanded(
                     child: _isCreated
-                        ? TextFormField(
+                        ? EventAmountField(
                             controller: _rate,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            decoration: const InputDecoration(
-                              labelText: 'Rate % p.a.',
-                              border: OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            validator: (v) =>
-                                parseNum(v ?? '') == null ? 'Number' : null,
+                            label: 'Rate % p.a.',
                           )
                         : EventDateRow(
                             label: 'Date',
@@ -355,8 +397,13 @@ balance update sets the figure outright.
               ],
               if (_isTrade) ...[
                 const Gap(12),
-                MarkdownTooltip(
-                  message: '''
+                EventAmountField(
+                  fieldKey: const ValueKey('price'),
+                  controller: _price,
+                  label: 'Price each',
+                  prefix: _moneyPrefix,
+                  optional: true,
+                  help: '''
 
 **Price paid**
 
@@ -364,29 +411,17 @@ The per-unit price for this trade, kept for the history. The holding
 is always valued at the latest market price, not this one.
 
 ''',
-                  child: TextFormField(
-                    key: const ValueKey('price'),
-                    controller: _price,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Price each',
-                      prefixText: _moneyPrefix,
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty || parseNum(v) != null)
-                        ? null
-                        : 'Number',
-                  ),
                 ),
               ],
               if (_isInterest) ...[
                 const Gap(12),
-                MarkdownTooltip(
-                  message: '''
+                EventAmountField(
+                  fieldKey: const ValueKey('bonus'),
+                  controller: _bonus,
+                  label: 'Bonus interest',
+                  prefix: _moneyPrefix,
+                  optional: true,
+                  help: '''
 
 **Bonus interest**
 
@@ -395,35 +430,10 @@ and bonus are added together in the balance and interest totals.
 Leave empty when there is no bonus.
 
 ''',
-                  child: TextFormField(
-                    key: const ValueKey('bonus'),
-                    controller: _bonus,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Bonus interest',
-                      prefixText: _moneyPrefix,
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty || parseNum(v) != null)
-                        ? null
-                        : 'Number',
-                  ),
                 ),
               ],
               const Gap(12),
-              EmacsTextField(
-                controller: _note,
-                minLines: 2,
-                decoration: const InputDecoration(
-                  labelText: 'Note',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-              ),
+              EventNoteField(controller: _note),
             ],
           ),
         ),
@@ -456,13 +466,10 @@ recomputed from the remaining history.
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: _cancel, child: const Text('Cancel')),
             const Gap(8),
             FilledButton(
-              onPressed: _hasChanges && _valid ? _save : null,
+              onPressed: _hasChanges && _valid ? _saveAndClose : null,
               child: const Text('Save'),
             ),
           ],

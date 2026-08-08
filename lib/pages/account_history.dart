@@ -41,28 +41,36 @@ class AccountHistory extends StatelessWidget {
 
   Future<void> _record(BuildContext context, Account account) async {
     final provider = context.read<AppProvider>();
-    final events = await showDialog<List<AccountEvent>>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => RecordEvent(account: account),
+      builder: (_) => RecordEvent(
+        account: account,
+        onSave: (events) async {
+          for (final event in events) {
+            provider.recordEvent(account.id, event);
+          }
+          if (!context.mounted) return;
+          await savePodOrError(context, provider);
+        },
+      ),
     );
-    if (events == null || events.isEmpty || !context.mounted) return;
-    for (final event in events) {
-      provider.recordEvent(account.id, event);
-    }
-    await savePodOrError(context, provider);
   }
 
   Future<void> _editAccount(BuildContext context, Account account) async {
     final provider = context.read<AppProvider>();
-    final updated = await showDialog<Account>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AccountEdit(account: account),
+      builder: (_) => AccountEdit(
+        account: account,
+        onSave: (updated) async {
+          provider.updateAccount(updated);
+          if (!context.mounted) return;
+          await savePodOrError(context, provider);
+        },
+      ),
     );
-    if (updated == null || !context.mounted) return;
-    provider.updateAccount(updated);
-    await savePodOrError(context, provider);
   }
 
   Future<void> _editEvent(
@@ -71,20 +79,24 @@ class AccountHistory extends StatelessWidget {
     AccountEvent event,
   ) async {
     final provider = context.read<AppProvider>();
-    final result = await showDialog<EventEditResult>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => EventEdit(event: event, account: account),
+      builder: (_) => EventEdit(
+        event: event,
+        account: account,
+        onSave: (updated) async {
+          provider.updateEvent(account.id, updated);
+          if (!context.mounted) return;
+          await savePodOrError(context, provider);
+        },
+        onDelete: () async {
+          provider.deleteEvent(account.id, event.id);
+          if (!context.mounted) return;
+          await savePodOrError(context, provider);
+        },
+      ),
     );
-    if (result == null || !context.mounted) return;
-    if (result.deleted) {
-      provider.deleteEvent(account.id, event.id);
-    } else if (result.event != null) {
-      provider.updateEvent(account.id, result.event!);
-    } else {
-      return;
-    }
-    await savePodOrError(context, provider);
   }
 
   /// Normalised-to-AUD note for foreign-currency accounts, e.g.

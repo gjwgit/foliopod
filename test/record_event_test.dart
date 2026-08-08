@@ -23,18 +23,21 @@ void main() {
   );
 
   /// Pumps a host app with a button that opens the RecordEvent dialog and
-  /// captures the popped result.
+  /// captures the entries reported through onSave.
   Future<List<AccountEvent>? Function()> openDialog(WidgetTester tester) async {
-    List<AccountEvent>? popped;
+    List<AccountEvent>? saved;
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) => Scaffold(
             body: TextButton(
               onPressed: () async {
-                popped = await showDialog<List<AccountEvent>>(
+                await showDialog<void>(
                   context: context,
-                  builder: (_) => RecordEvent(account: account()),
+                  builder: (_) => RecordEvent(
+                    account: account(),
+                    onSave: (events) async => saved = events,
+                  ),
                 );
               },
               child: const Text('open'),
@@ -45,7 +48,7 @@ void main() {
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    return () => popped;
+    return () => saved;
   }
 
   final value = find.byKey(const ValueKey('value'));

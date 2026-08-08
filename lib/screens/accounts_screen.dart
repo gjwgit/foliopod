@@ -15,7 +15,6 @@ import 'package:markdown_tooltip/markdown_tooltip.dart';
 import 'package:provider/provider.dart';
 
 import 'package:foliopod/models/account.dart';
-import 'package:foliopod/models/account_event.dart';
 import 'package:foliopod/pages/account_edit.dart';
 import 'package:foliopod/pages/account_history.dart';
 import 'package:foliopod/pages/record_event.dart';
@@ -64,14 +63,16 @@ class _AccountsScreenState extends State<AccountsScreen> {
       savePodOrError(context, provider);
 
   Future<void> _addAccount(AppProvider provider) async {
-    final account = await showDialog<Account>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const AccountEdit(),
+      builder: (_) => AccountEdit(
+        onSave: (account) async {
+          provider.addAccount(account);
+          await _saveOrError(provider);
+        },
+      ),
     );
-    if (account == null || !mounted) return;
-    provider.addAccount(account);
-    await _saveOrError(provider);
   }
 
   /// Opens the account's transaction log; entries are edited there and
@@ -83,16 +84,19 @@ class _AccountsScreenState extends State<AccountsScreen> {
   );
 
   Future<void> _recordFor(AppProvider provider, Account account) async {
-    final events = await showDialog<List<AccountEvent>>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => RecordEvent(account: account),
+      builder: (_) => RecordEvent(
+        account: account,
+        onSave: (events) async {
+          for (final event in events) {
+            provider.recordEvent(account.id, event);
+          }
+          await _saveOrError(provider);
+        },
+      ),
     );
-    if (events == null || events.isEmpty || !mounted) return;
-    for (final event in events) {
-      provider.recordEvent(account.id, event);
-    }
-    await _saveOrError(provider);
   }
 
   Future<void> _confirmDelete(AppProvider provider, Account account) async {

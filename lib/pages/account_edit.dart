@@ -10,13 +10,15 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:emacs_text_field/emacs_text_field.dart';
 import 'package:gap/gap.dart';
 import 'package:markdown_tooltip/markdown_tooltip.dart';
+import 'package:solidui/solidui.dart';
 
 import 'package:foliopod/constants/app.dart'
     show baseCurrency, supportedCurrencies;
 import 'package:foliopod/models/account.dart';
+import 'package:foliopod/pages/edit_fields/account_amounts_row.dart';
+import 'package:foliopod/pages/edit_fields/event_note_field.dart';
 import 'package:foliopod/pages/event_date_row.dart';
 import 'package:foliopod/services/money_format.dart';
 
@@ -24,17 +26,27 @@ import 'package:foliopod/services/money_format.dart';
 ///
 /// For an existing account the balance and rate are shown read-only —
 /// they change only through recorded events (Record button on the tile)
-/// so the history stays a complete record. Pops the resulting [Account]
-/// on Save, or null on Cancel.
+/// so the history stays a complete record. Save reports the resulting
+/// [Account] through [onSave] and closes; Cancel closes without saving.
 class AccountEdit extends StatefulWidget {
   final Account? account;
-  const AccountEdit({super.key, this.account});
+
+  /// Called with the account to store when the user taps Save. The
+  /// caller updates the provider and writes to the Pod.
+  ///
+  /// Returns a future that completes when the Pod write is done. It MUST
+  /// be awaited by the caller's implementation: closing the app window
+  /// waits on this before quitting, so a fire-and-forget write would be
+  /// killed mid-flight and the account silently lost.
+  final Future<void> Function(Account)? onSave;
+
+  const AccountEdit({super.key, this.account, this.onSave});
 
   @override
   State<AccountEdit> createState() => _AccountEditState();
 }
 
-class _AccountEditState extends State<AccountEdit> {
+class _AccountEditState extends State<AccountEdit> with UnsavedChangesMixin {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _institution;
@@ -61,14 +73,21 @@ class _AccountEditState extends State<AccountEdit> {
   late final AccountType _initType;
   late final String _initCurrency;
   late final bool _initIsClosed;
+  late final String _initBalance;
+  late final String _initRate;
+  late final DateTime _initOpened;
 
   bool get _isNew => widget.account == null;
 
   /// Whether any editable field differs from its initial value. Drives
-  /// the enabled state of the Save button. A new account always counts
-  /// as changed once it has a name.
+  /// the enabled state of the Save button, and whether closing asks about
+  /// unsaved changes. Balance, rate and the opening date are only
+  /// editable on a new account, so they count only there. 20260808 gjw
   bool get _hasChanges =>
-      _isNew ||
+      (_isNew &&
+          (_balance.text != _initBalance ||
+              _rate.text != _initRate ||
+              _opened != _initOpened)) ||
       _name.text != _initName ||
       _institution.text != _initInstitution ||
       _number.text != _initNumber ||
@@ -115,8 +134,20 @@ class _AccountEditState extends State<AccountEdit> {
     _initType = _type;
     _initCurrency = _currency;
     _initIsClosed = _isClosed;
+    _initBalance = _balance.text;
+    _initRate = _rate.text;
+    _initOpened = _opened;
 
-    for (final c in [_name, _institution, _number, _symbol, _price, _note]) {
+    for (final c in [
+      _name,
+      _institution,
+      _number,
+      _balance,
+      _rate,
+      _symbol,
+      _price,
+      _note,
+    ]) {
       c.addListener(() => setState(() {}));
     }
   }
@@ -146,67 +177,12 @@ class _AccountEditState extends State<AccountEdit> {
   String? get _symbolOrNull =>
       _symbol.text.trim().isEmpty ? null : _symbol.text.trim().toUpperCase();
 
-  String get _balanceHelp => _isNew
-      ? '''
-
-**Opening balance**
-
-The opening balance of the account — for a superannuation fund, the
-balance on your latest statement — recorded as the first history
-entry.
-
-'''
-      : '''
-
-**Balance**
-
-The current balance changes only through recorded events so the
-history stays complete. Use the Record button on the account to
-update it.
-
-''';
-
-  String get _priceHelp => _isNew
-      ? '''
-
-**Opening price**
-
-The share price to start from, recorded as part of the opening entry.
-It values the holding until a market price is fetched, so it is worth
-setting when working offline.
-
-'''
-      : '''
-
-**Share price**
-
-The price the holding is currently marked at. It changes through
-recorded Price Update entries — once a day when the fetched price has
-moved, or by hand from the Record button — so the history keeps the
-price series.
-
-''';
-
-  String get _rateHelp => _isNew
-      ? '''
-
-**Interest rate**
-
-The current interest rate of the account (% per annum).
-
-'''
-      : '''
-
-**Interest rate**
-
-The rate changes only through recorded events so the history stays
-complete. Use the Record button on the account to record a rate
-change.
-
-''';
-
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
+  /// Hand the edited account to [AccountEdit.onSave] and wait for the Pod
+  /// write. Does NOT close the dialog: the window-close guard saves
+  /// without popping, since the window is going, not just this route.
+  /// Returns whether the save went ahead.
+  Future<bool> _save() async {
+    if (!_formKey.currentState!.validate()) return false;
     final Account result;
     if (_isNew) {
       result = Account.open(
@@ -238,8 +214,44 @@ change.
         note: _note.text.trim().isEmpty ? null : _note.text.trim(),
       );
     }
-    Navigator.of(context).pop(result);
+    // Awaited so a window close can wait for the Pod write to complete.
+    await widget.onSave?.call(result);
+    return true;
   }
+
+  /// The Save button: save, then close the dialog.
+  Future<void> _saveAndClose() async {
+    if (await _save() && mounted) Navigator.of(context).pop();
+  }
+
+  /// The Cancel button: close, but first ask about any unsaved changes.
+  Future<void> _cancel() async {
+    if (!_hasChanges) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final action = await showUnsavedChangesDialog(context);
+    if (!mounted) return;
+    switch (action) {
+      case UnsavedChangesAction.save:
+        await _saveAndClose();
+      case UnsavedChangesAction.discard:
+        Navigator.of(context).pop();
+      case UnsavedChangesAction.keepEditing:
+        break;
+    }
+  }
+
+  // Closing the whole app window prompts to save/discard just like Cancel
+  // does, without popping the Navigator — the window is closing, not just
+  // this route. UnsavedChangesMixin runs that prompt; it only needs to know
+  // what counts as unsaved and how to save it.
+
+  @override
+  bool get hasUnsavedChanges => _hasChanges;
+
+  @override
+  Future<void> saveUnsavedChanges() => _save();
 
   @override
   Widget build(BuildContext context) {
@@ -354,71 +366,13 @@ above to the one the shares trade in.
                     ),
                   ),
                 const Gap(12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: MarkdownTooltip(
-                        message: _balanceHelp,
-                        child: TextFormField(
-                          controller: _balance,
-                          enabled: _isNew,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          decoration: InputDecoration(
-                            labelText: _isShares
-                                ? (_isNew ? 'Units held' : 'Units')
-                                : (_isNew ? 'Opening balance' : 'Balance'),
-                            prefixText: _isShares ? null : '\$ ',
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                          ),
-                        ),
-                      ),
-                    ),
-                    // A super fund has no headline rate, so the balance
-                    // takes the full width. 20260731 gjw
-                    if (!_isSuper) ...[
-                      const Gap(12),
-                      Expanded(
-                        child: _isShares
-                            ? MarkdownTooltip(
-                                message: _priceHelp,
-                                child: TextFormField(
-                                  controller: _price,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                  enabled: _isNew,
-                                  decoration: InputDecoration(
-                                    labelText: _isNew
-                                        ? 'Opening price'
-                                        : 'Share price',
-                                    border: const OutlineInputBorder(),
-                                    isDense: true,
-                                  ),
-                                ),
-                              )
-                            : MarkdownTooltip(
-                                message: _rateHelp,
-                                child: TextFormField(
-                                  controller: _rate,
-                                  enabled: _isNew,
-                                  keyboardType:
-                                      const TextInputType.numberWithOptions(
-                                        decimal: true,
-                                      ),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Rate % p.a.',
-                                    border: OutlineInputBorder(),
-                                    isDense: true,
-                                  ),
-                                ),
-                              ),
-                      ),
-                    ],
-                  ],
+                AccountAmountsRow(
+                  balance: _balance,
+                  price: _price,
+                  rate: _rate,
+                  isNew: _isNew,
+                  isShares: _isShares,
+                  isSuper: _isSuper,
                 ),
                 const Gap(12),
                 if (_isNew)
@@ -439,27 +393,16 @@ above to the one the shares trade in.
                     onChanged: (v) => setState(() => _isClosed = v),
                   ),
                 const Gap(12),
-                EmacsTextField(
-                  controller: _note,
-                  minLines: 2,
-                  decoration: const InputDecoration(
-                    labelText: 'Note',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                ),
+                EventNoteField(controller: _note),
               ],
             ),
           ),
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: _cancel, child: const Text('Cancel')),
         FilledButton(
-          onPressed: _hasChanges ? _save : null,
+          onPressed: _hasChanges ? _saveAndClose : null,
           child: const Text('Save'),
         ),
       ],

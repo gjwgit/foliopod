@@ -43,20 +43,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
   /// recomputed by replaying its history. 20260727 gjw
   Future<void> _editEvent(Account account, AccountEvent event) async {
     final provider = context.read<AppProvider>();
-    final result = await showDialog<EventEditResult>(
+    await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => EventEdit(event: event, account: account),
+      builder: (_) => EventEdit(
+        event: event,
+        account: account,
+        onSave: (updated) async {
+          provider.updateEvent(account.id, updated);
+          if (!mounted) return;
+          await savePodOrError(context, provider);
+        },
+        onDelete: () async {
+          provider.deleteEvent(account.id, event.id);
+          if (!mounted) return;
+          await savePodOrError(context, provider);
+        },
+      ),
     );
-    if (result == null || !mounted) return;
-    if (result.deleted) {
-      provider.deleteEvent(account.id, event.id);
-    } else if (result.event != null) {
-      provider.updateEvent(account.id, result.event!);
-    } else {
-      return;
-    }
-    await savePodOrError(context, provider);
   }
 
   @override
