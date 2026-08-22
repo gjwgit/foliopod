@@ -224,10 +224,9 @@ class AccountEvent {
     AccountEventType.sell => _trade('Sell', symbol, ticker),
     AccountEventType.dividend =>
       'Dividend $symbol${_money.format(amount ?? 0)}',
-    AccountEventType.priceUpdate =>
-      'Price '
-          '${previous != null ? '$symbol${_money.format(previous!)} → ' : ''}'
-          '$symbol${_money.format(price ?? 0)}',
+    // 20260822 gjw The price it replaces is not shown: the entry below
+    // it in the history is the previous price.
+    AccountEventType.priceUpdate => 'Price $symbol${_money.format(price ?? 0)}',
     AccountEventType.contribution =>
       'Contribution $symbol${_money.format(amount ?? 0)}',
     // Earnings can be a loss, so the sign matters here.

@@ -38,6 +38,7 @@ Williams](https://togaware.com/Graham.Williams.html).
 
 ## 1.0 New Secure Key Handling
 
++ Show each holding's value in the account history [1.0.16 20260822 gjw]
 + Keep the window open when a save fails on close [1.0.15 20260808 gjw]
 + Fix Type dropdown overflowing the Account dialog [1.0.14 20260808 gjw]
 + Restore Save new account without prompting if untouched [1.0.13 20260808 gjw]

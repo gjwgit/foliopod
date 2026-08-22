@@ -188,7 +188,9 @@ note.
         ],
       ),
       content: SizedBox(
-        width: 560,
+        // Wide enough for the description alongside the columns of
+        // figures on the right. 20260822 gjw
+        width: 640,
         height: 440,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

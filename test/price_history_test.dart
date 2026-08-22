@@ -58,11 +58,11 @@ void main() {
       expect(a.currentBalance, 100);
     });
 
-    test('the description shows the movement', () {
+    test('the description shows the new price only', () {
       final a = holding(openingPrice: 300).applyEvent(priceAt(412.5, afterFY));
       expect(
         a.events.last.describe(symbol: 'US\$', ticker: 'MSFT'),
-        'Price US\$300.00 → US\$412.50',
+        'Price US\$412.50',
       );
     });
 
