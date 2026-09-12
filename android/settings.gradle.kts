@@ -19,9 +19,8 @@ pluginManagement {
 
 plugins {
     id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-    // 20260731 gjw Held at 8.x: see android/gradle.properties.
-    id("com.android.application") version "8.13.0" apply false
-    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    id("com.android.application") version "9.1.0" apply false
+    id("org.jetbrains.kotlin.android") version "2.4.0" apply false
 }
 
 include(":app")
