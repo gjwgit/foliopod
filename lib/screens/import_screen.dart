@@ -9,7 +9,6 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -77,15 +76,22 @@ class _ImportScreenState extends State<ImportScreen> {
         return;
       }
 
-      final savePath = await FilePicker.saveFile(
+      // From file_picker 12 the picker writes the bytes itself and returns
+      // the destination as a Uri, which is a content:// URI on Android, so
+      // only a file:// one has a path to report. 20260912 gjw
+
+      final saved = await FilePicker.saveFile(
         dialogTitle: 'Save JSON backup',
         fileName: fileName,
+        bytes: bytes,
+        mimeType: 'application/json',
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
-      if (savePath != null) {
-        await File(savePath).writeAsBytes(bytes);
-        _setMessage('Saved to $savePath');
+      if (saved != null) {
+        _setMessage(
+          'Saved to ${saved.isScheme('file') ? saved.toFilePath() : saved}',
+        );
       }
     } catch (e, st) {
       debugPrint('[Export JSON] error: $e\n$st');
@@ -105,23 +111,20 @@ class _ImportScreenState extends State<ImportScreen> {
     });
 
     try {
-      final result = await FilePicker.pickFiles(
+      // pickFile is file_picker 12's single-file picker, returning the file
+      // itself rather than a result wrapper, and the bytes are read from it
+      // on demand rather than through withData. 20260912 gjw
+
+      final file = await FilePicker.pickFile(
         dialogTitle: 'Select FolioPod JSON backup',
         type: FileType.any,
-        withData: true,
       );
-      if (result == null || result.files.isEmpty) {
+      if (file == null) {
         setState(() => _loading = false);
         return;
       }
 
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null) {
-        _setMessage('Could not read file.', error: true);
-        setState(() => _loading = false);
-        return;
-      }
+      final bytes = await file.readAsBytes();
 
       final List<dynamic> raw = jsonDecode(utf8.decode(bytes));
       final imported = raw
