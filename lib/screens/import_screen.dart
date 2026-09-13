@@ -23,10 +23,10 @@ import 'package:foliopod/services/app_provider.dart';
 import 'package:foliopod/widgets/error_dialog.dart';
 import 'package:foliopod/widgets/message_banner.dart';
 
-/// Export a complete JSON backup of all accounts (with their full
-/// histories), and import from a previously saved backup. Importing
-/// merges by account id — accounts already present are skipped, so
-/// re-importing the same backup is a no-op. 20260727 gjw
+/// Export a complete JSON backup of all accounts (with their full histories),
+/// and import from a previously saved backup. Importing merges by account id —
+/// accounts already present are skipped, so re-importing the same backup is a
+/// no-op.
 class ImportScreen extends StatefulWidget {
   const ImportScreen({super.key});
 
@@ -76,9 +76,9 @@ class _ImportScreenState extends State<ImportScreen> {
         return;
       }
 
-      // From file_picker 12 the picker writes the bytes itself and returns
-      // the destination as a Uri, which is a content:// URI on Android, so
-      // only a file:// one has a path to report. 20260912 gjw
+      // 20260912 gjw From file_picker 12 the picker writes the bytes itself and
+      // returns the destination as a Uri, which is a content:// URI on Android,
+      // so only a file:// one has a path to report.
 
       final saved = await FilePicker.saveFile(
         dialogTitle: 'Save JSON backup',
@@ -111,9 +111,9 @@ class _ImportScreenState extends State<ImportScreen> {
     });
 
     try {
-      // pickFile is file_picker 12's single-file picker, returning the file
-      // itself rather than a result wrapper, and the bytes are read from it
-      // on demand rather than through withData. 20260912 gjw
+      // 20260912 gjw pickFile is file_picker 12's single-file picker, returning
+      // the file itself rather than a result wrapper, and the bytes are read
+      // from it on demand rather than through withData.
 
       final file = await FilePicker.pickFile(
         dialogTitle: 'Select FolioPod JSON backup',
@@ -139,8 +139,8 @@ class _ImportScreenState extends State<ImportScreen> {
 
       final added = provider.importAccounts(imported);
 
-      // Report a failed write rather than discarding the error string and
-      // telling the user the import succeeded. 20260808 gjw
+      // 20260808 gjw Report a failed write rather than discarding the error
+      // string and telling the user the import succeeded.
 
       final saveError = await provider.saveToPod();
       if (!mounted) return;

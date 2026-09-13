@@ -38,6 +38,7 @@ Williams](https://togaware.com/Graham.Williams.html).
 
 ## 1.0 New Secure Key Handling
 
++ Date-stamp comments at the start rather than the end [1.0.20 20260914 gjw]
 + Update to solidpod 1.0.22 and solidui 1.0.41 [1.0.19 20260914 gjw]
 + Remember the window size between sessions [1.0.18 20260913 gjw]
 + Updated templates, android, and file picker [1.0.17 20260912 gjw]
